@@ -1,0 +1,79 @@
+---
+title: "Laporan Analisis Uji Proporsi & Varians"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: pdf_document
+params:
+  test_type: NULL
+  inputs: NULL
+  all_results: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+generate_interpretation <- function(test_obj, test_type, alternative_type, inputs) {
+  if (is.null(test_obj) || inherits(test_obj, "try-error")) return("Analisis tidak dapat dijalankan.")
+  
+  p_val <- test_obj$p.value
+  kesimpulan <- if (p_val < 0.05) "H0 Ditolak" else "H0 Gagal Ditolak"
+  
+  kalimat_akhir <- ""
+  if (test_type == "Uji Proporsi 1 Kelompok") {
+    frasa <- switch(alternative_type,
+                    "two.sided" = "berbeda dari",
+                    "less" = "lebih kecil dari",
+                    "greater" = "lebih besar dari")
+    kalimat_akhir <- paste("proporsi sebenarnya", frasa, inputs$p)
+    
+  } else if (test_type == "Uji Proporsi 2 Kelompok") {
+    kalimat_akhir <- "terdapat perbedaan proporsi yang signifikan antara kedua kelompok"
+    
+  } else if (test_type == "Uji Varians 2 Kelompok") {
+    kalimat_akhir <- "terdapat perbedaan varians (rasio tidak sama dengan 1) yang signifikan antara kedua kelompok"
+  }
+  
+  if (p_val < 0.05) {
+    return(paste0("Kesimpulan (", kesimpulan, "): Karena p-value (", round(p_val, 4), "), terdapat bukti yang cukup untuk menyatakan bahwa ", kalimat_akhir, "."))
+  } else {
+    return(paste0("Kesimpulan (", kesimpulan, "): Karena p-value (", round(p_val, 4), "), tidak ada bukti yang cukup untuk menyatakan bahwa ", kalimat_akhir, "."))
+  }
+}
+```
+
+```{r}
+if (params$test_type == "Uji Proporsi 1 Kelompok") {
+  cat("- Konteks Variabel:", params$inputs$konteks, "\n")
+  cat("- Input Manual: x =", params$inputs$x, ", n =", params$inputs$n, "\n")
+  cat("- Proporsi Hipotesis: $p_0$ =", params$inputs$p, "\n")
+} else if (params$test_type == "Uji Proporsi 2 Kelompok") {
+  cat("- Variabel Kondisi:", params$inputs$var_cond, "\n")
+  cat("- Kondisi 'Sukses':", params$inputs$cond, "\n")
+  cat("- Variabel Grup:", params$inputs$var_group, " (dipotong pada median:", round(params$inputs$split, 2), ")\n")
+} else if (params$test_type == "Uji Varians 2 Kelompok") {
+  cat("- Variabel Kelompok 1:", params$inputs$var1, "\n")
+  cat("- Variabel Kelompok 2:", params$inputs$var2, "\n")
+}
+```
+
+```{r}
+test_obj <- params$all_results$two.sided
+if(!is.null(test_obj)){cat("```\n"); print(test_obj); cat("```\n")} else {cat("Analisis tidak tersedia.")}
+```
+
+`r generate_interpretation(params$all_results$two.sided, params$test_type, "two.sided", params$inputs)`
+
+```{r}
+test_obj <- params$all_results$less
+if(!is.null(test_obj)){cat("```\n"); print(test_obj); cat("```\n")} else {cat("Analisis tidak tersedia.")}
+```
+
+`r generate_interpretation(params$all_results$less, params$test_type, "less", params$inputs)`
+
+```{r}
+test_obj <- params$all_results$greater
+if(!is.null(test_obj)){cat("```\n"); print(test_obj); cat("```\n")} else {cat("Analisis tidak tersedia.")}
+```
+
+`r generate_interpretation(params$all_results$greater, params$test_type, "greater", params$inputs)`

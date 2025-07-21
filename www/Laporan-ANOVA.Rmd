@@ -1,0 +1,52 @@
+---
+title: "Laporan Analisis Varians (ANOVA)"
+output: pdf_document
+params:
+  test_type: NULL
+  inputs: NULL
+  asumsi_status: NULL
+  anova_result: NULL
+  posthoc_result: NULL
+  interpretation: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Hasil Analisis: `r params$test_type`
+
+- Variabel Dependen: `r params$inputs$dv`
+- Variabel Independen: `r if(params$test_type == "ANOVA 1 Arah") params$inputs$iv else paste(params$inputs$iv1, "dan", params$inputs$iv2)`
+
+## Pemeriksaan Asumsi
+Status pemeriksaan asumsi (Normalitas & Homogenitas): `r params$asumsi_status`
+
+```{r}
+if(!is.null(params$anova_result)){
+  cat("```\n")
+  print(params$anova_result)
+  cat("```\n")
+} else {
+  cat("Analisis ANOVA tidak dijalankan karena asumsi tidak terpenuhi.")
+}
+```
+
+```{r}
+if(!is.null(params$posthoc_result)){
+  cat("```\n")
+  print(params$posthoc_result)
+  cat("```\n")
+} else {
+  cat("Uji lanjut tidak dilakukan.")
+}
+```
+
+# Interpretasi
+clean_interpretation <- gsub("<ul>", "", params$interpretation)
+clean_interpretation <- gsub("</ul>", "", clean_interpretation)
+clean_interpretation <- gsub("<li>", "- ", clean_interpretation)
+clean_interpretation <- gsub("</li>", "\n", clean_interpretation)
+clean_interpretation <- gsub("<b>|</b>", "**", clean_interpretation)
+
+cat(clean_interpretation)

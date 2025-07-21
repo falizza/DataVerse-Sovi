@@ -1,0 +1,86 @@
+---
+title: "Laporan Analisis Uji Asumsi Data"
+output: pdf_document
+params:
+  results: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(knitr)
+```
+
+```{r}
+if(!is.null(params$results$shapiro)){
+  cat("```\n")
+  print(params$results$shapiro)
+  cat("```\n")
+  
+  p_val <- params$results$shapiro$p.value
+  if (p_val < 0.05) {
+      cat("\nInterpretasi:\n p-value (", round(p_val, 4), ") < 0.05, maka H0 ditolak. \n Terdapat cukup bukti statistik untuk menyatakan bahwa data TIDAK berdistribusi normal.\n")
+  } else {
+      cat("\nInterpretasi: \n p-value (", round(p_val, 4), ") >= 0.05, maka H0 gagal ditolak. \n Tidak terdapat cukup bukti statistik untuk menyatakan bahwa data tidak berdistribusi normal.\n")
+  }
+} else {
+  cat("Uji Shapiro-Wilk tidak dilakukan.")
+}
+```
+
+```{r}
+# Uji Homogenitas Varians
+if(!is.null(params$results$levene)){
+  cat("```\n")
+  print(params$results$levene)
+  cat("```\n")
+  
+  p_val <- params$results$levene$`Pr(>F)`[1]
+  if (p_val < 0.05) {
+    cat("\nInterpretasi:\n p-value (", round(p_val, 4), ") < 0.05, maka H0 ditolak. \n Terdapat cukup bukti statistik untuk menyatakan bahwa varians TIDAK homogen (heteroskedastisitas).\n")
+  } else {
+    cat("\nInterpretasi:\n p-value (", round(p_val, 4), ") >= 0.05, maka H0 gagal ditolak. \n Tidak terdapat cukup bukti statistik untuk menyatakan bahwa varians tidak homogen.\n")
+  }
+} else {
+  cat("Uji Levene tidak dapat dilakukan.")
+}
+```
+
+```{r}
+# Outlier
+boxplot(params$results$data, main = paste("Boxplot Variabel", params$results$var_name), col = "tomato")
+
+if(length(params$results$outliers) > 0){
+  outlier_values <- sort(params$results$outliers)
+  if (length(outlier_values) > 10) {
+    outlier_values_display <- c(round(outlier_values[1:10], 2), "...")
+  } else {
+    outlier_values_display <- round(outlier_values, 2)
+  }
+  cat("\n Nilai Outlier: ", paste(outlier_values_display, collapse = ', '))
+}
+```
+
+```{r}
+# Interpretasi
+res <- params$results
+is_normal <- !is.null(res$shapiro) && res$shapiro$p.value >= 0.05
+is_homogen <- !is.null(res$levene) && res$levene$`Pr(>F)`[1] >= 0.05
+has_outliers <- length(res$outliers) > 0
+
+cat("Penilaian Akhir:\n\n")
+cat("- Asumsi Normalitas: ", ifelse(is_normal, "TERPENUHI", "DILANGGAR"), "\n")
+cat("- Asumsi Homogenitas: ", ifelse(is_homogen, "TERPENUHI", "DILANGGAR"), "\n")
+cat("- Kehadiran Outlier Signifikan: ", ifelse(has_outliers, "YA", "TIDAK"), "\n\n")
+
+cat("Rekomendasi: \n\n")
+if (is_normal && is_homogen && !has_outliers) {
+    cat("Semua asumsi utama terpenuhi. \n Pengujian statistik PARAMETRIK (misal: Uji-t, ANOVA) sangat direkomendasikan \n untuk analisis inferensia yang valid dan memiliki power statistik yang tinggi.\n")
+} else {
+    cat("Terdapat satu atau lebih pelanggaran asumsi. Untuk menjaga validitas hasil, \n disarankan untuk mempertimbangkan salah satu dari pendekatan berikut:\n\n")
+    cat("  a) Metode Non-Parametrik: \n Gunakan uji statistik alternatif yang tidak bergantung pada asumsi distribusi \n (misal: Uji Mann-Whitney, Kruskal-Wallis).\n")
+    cat("  b) Transformasi Data: \n Dapat melakukan transformasi pada data (misal: logaritmik, akar kuadrat) \n untuk menstabilkan varians atau mendekati normalitas, kemudian uji kembali asumsinya.\n")
+    cat("  c) Penanganan Outlier: \n Jika outlier menjadi masalah utama, pertimbangkan untuk menganalisis data dengan dan tanpa \n outlier untuk melihat pengaruhnya.\n")
+}
+```
+

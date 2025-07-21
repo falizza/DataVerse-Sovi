@@ -1,0 +1,74 @@
+---
+title: "Laporan Analisis Uji Beda Rata-rata"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: pdf_document
+params:
+  test_type: "Tidak Ada"
+  inputs: NULL
+  all_results: NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+generate_interpretation <- function(test_obj, test_type, inputs) {
+  p_val <- test_obj$p.value
+  alternative <- test_obj$alternative
+  
+  if (test_type == "Uji 1 Kelompok") {
+    conclusion_text <- switch(alternative,
+      "two.sided" = paste0("berbeda secara signifikan dari ", inputs$mu),
+      "less"      = paste0("secara signifikan lebih kecil dari ", inputs$mu),
+      "greater"   = paste0("secara signifikan lebih besar dari ", inputs$mu)
+    )
+    var_name <- inputs$var1
+    
+    if(p_val < 0.05) {
+      return(paste0("Kesimpulan (H0 Ditolak): Karena p-value (", round(p_val, 4), ") < 0.05, terdapat bukti statistik yang signifikan untuk menyatakan bahwa rata-rata variabel '", var_name, "' ", conclusion_text, "."))
+    } else {
+      return(paste0("Kesimpulan (H0 Gagal Ditolak): Karena p-value (", round(p_val, 4), ") >= 0.05, tidak ada bukti statistik yang cukup untuk menyatakan bahwa rata-rata variabel '", var_name, "' ", conclusion_text, "."))
+    }
+    
+  } else { # Uji 2 Kelompok
+    conclusion_text <- switch(alternative,
+      "two.sided" = "berbeda secara signifikan di antara kedua kelompok",
+      "less"      = "pada kelompok pertama secara signifikan lebih kecil daripada kelompok kedua",
+      "greater"   = "pada kelompok pertama secara signifikan lebih besar daripada kelompok kedua"
+    )
+    var_name <- inputs$var_num
+    
+    if(p_val < 0.05) {
+      return(paste0("Kesimpulan (H0 Ditolak): Karena p-value (", round(p_val, 4), ") < 0.05, terdapat bukti statistik yang signifikan bahwa rata-rata variabel '", var_name, "' ", conclusion_text, "."))
+    } else {
+      return(paste0("Kesimpulan (H0 Gagal Ditolak): Karena p-value (", round(p_val, 4), ") >= 0.05, tidak ada bukti statistik yang cukup untuk menyatakan bahwa rata-rata variabel '", var_name, "' ", conclusion_text, "."))
+    }
+  }
+}
+```
+
+```{r}
+test_obj <- params$all_results$two.sided
+cat("```\n")
+print(test_obj)
+cat("```\n")
+```
+
+`r generate_interpretation(params$all_results$two.sided, params$test_type, params$inputs)`
+
+```{r}
+test_obj <- params$all_results$less
+cat("```\n")
+print(test_obj)
+cat("```\n")
+```
+
+`r generate_interpretation(params$all_results$less, params$test_type, params$inputs)`
+
+```{r}
+test_obj <- params$all_results$greater
+cat("```\n")
+print(test_obj)
+cat("```\n")
+```
+
+`r generate_interpretation(params$all_results$greater, params$test_type, params$inputs)`

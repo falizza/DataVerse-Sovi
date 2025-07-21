@@ -1,0 +1,99 @@
+---
+title: "Hasil Eksplorasi Data"
+output: pdf_document
+params:
+  data: NA
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+```
+
+```{r}
+head(params$data)
+```
+
+```{r}
+summary(params$data)
+```
+
+```{r}
+cor_matrix <- cor(params$data, use = "pairwise.complete.obs")
+corrplot::corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", addCoef.col = "black")
+```
+
+```{r}
+params$data %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~ variable, scales = "free") +
+  theme_minimal()
+```
+
+```{r interpretasi}
+df <- params$data
+
+cat("Tinjauan Statistik Awal:\n")
+cat("Laporan ini menyajikan statistik deskriptif untuk", ncol(df), "variabel terpilih.\n\n")
+
+cat("Interpretasi Distribusi:\n")
+for (v in names(df)) {
+  x <- df[[v]]
+  if (!is.numeric(x)) next
+  skew_x <- DescTools::Skew(x, na.rm = TRUE)
+  kurt_x <- DescTools::Kurt(x, na.rm = TRUE)
+  mean_x <- mean(x, na.rm = TRUE)
+  median_x <- median(x, na.rm = TRUE)
+  sd_x <- sd(x, na.rm = TRUE)
+
+  cat(paste0("- Variabel ", v, ": "))
+  
+  # Skewness
+  if (abs(skew_x) < 0.5) cat("\n   Berdistribusi simetris")
+  else if (skew_x > 0) cat("\n   Berdistribusi menceng ke kanan")
+  else cat("\n   Berdistribusi menceng ke kiri")
+  
+  cat(", ")
+  
+  # Kurtosis
+  if (kurt_x > 3) cat("dengan puncak tajam (leptokurtic)")
+  else if (kurt_x < 3) cat("dengan puncak datar (platykurtic)")
+  else cat("dengan distribusi menyerupai normal")
+  
+  # Mean vs median
+  cat(". ")
+  if (abs(mean_x - median_x) > 0.5 * sd_x) {
+    cat("\n   Perbedaan mean dan median menunjukkan potensi outlier atau distribusi tidak normal.\n")
+  } else {
+    cat("\n   Mean dan median relatif seimbang.\n")
+  }
+}
+
+# Korelasi
+df_num <- df %>% dplyr::select(where(is.numeric))
+if (ncol(df_num) > 1) {
+  cat("\n Interpretasi Korelasi:\n")
+  cor_matrix <- cor(df_num, use = "pairwise.complete.obs")
+  for (i in 1:(ncol(cor_matrix)-1)) {
+    for (j in (i+1):ncol(cor_matrix)) {
+      var1 <- colnames(cor_matrix)[i]
+      var2 <- colnames(cor_matrix)[j]
+      r <- cor_matrix[i, j]
+      
+      strength <- ifelse(abs(r) >= 0.8, "sangat kuat",
+                         ifelse(abs(r) >= 0.6, "kuat",
+                                ifelse(abs(r) >= 0.4, "cukup", 
+                                       ifelse(abs(r) >= 0.2, "lemah", "sangat lemah"))))
+      direction <- ifelse(r > 0, "positif", ifelse(r < 0, "negatif", "tidak ada"))
+      
+      cat(paste0("- ", var1, " vs ", var2, ": hubungan ", direction, " dengan kekuatan ", strength, " (r = ", round(r, 2), ").\n"))
+    }
+  }
+}
+
+```
+
