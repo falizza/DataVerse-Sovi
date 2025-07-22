@@ -8,11 +8,11 @@ params:
   all_results: NULL
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, echo = FALSE, results = 'asis'}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
-```{r}
+```{r echo = FALSE, results = 'asis'}
 generate_interpretation <- function(test_obj, test_type, alternative_type, inputs) {
   if (is.null(test_obj) || inherits(test_obj, "try-error")) return("Analisis tidak dapat dijalankan.")
   
@@ -42,7 +42,7 @@ generate_interpretation <- function(test_obj, test_type, alternative_type, input
 }
 ```
 
-```{r}
+```{r echo = FALSE, results = 'asis'}
 if (params$test_type == "Uji Proporsi 1 Kelompok") {
   cat("- Konteks Variabel:", params$inputs$konteks, "\n")
   cat("- Input Manual: x =", params$inputs$x, ", n =", params$inputs$n, "\n")
@@ -57,21 +57,27 @@ if (params$test_type == "Uji Proporsi 1 Kelompok") {
 }
 ```
 
-```{r}
+# Jenis Uji: Dua Arah
+
+```{r echo = FALSE, results = 'asis'}
 test_obj <- params$all_results$two.sided
 if(!is.null(test_obj)){cat("```\n"); print(test_obj); cat("```\n")} else {cat("Analisis tidak tersedia.")}
 ```
 
 `r generate_interpretation(params$all_results$two.sided, params$test_type, "two.sided", params$inputs)`
 
-```{r}
+# Jenis Uji: Kurang Dari
+
+```{r echo = FALSE, results = 'asis'}
 test_obj <- params$all_results$less
 if(!is.null(test_obj)){cat("```\n"); print(test_obj); cat("```\n")} else {cat("Analisis tidak tersedia.")}
 ```
 
 `r generate_interpretation(params$all_results$less, params$test_type, "less", params$inputs)`
 
-```{r}
+# Jenis Uji: Lebih Dari
+
+```{r echo = FALSE, results = 'asis'}
 test_obj <- params$all_results$greater
 if(!is.null(test_obj)){cat("```\n"); print(test_obj); cat("```\n")} else {cat("Analisis tidak tersedia.")}
 ```

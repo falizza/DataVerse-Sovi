@@ -5,12 +5,14 @@ params:
   model: NULL
   y_var: NULL
   x_vars: NULL
+  weights_list: NULL
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, echo = FALSE, results = 'asis'}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 library(car)
 library(lmtest)
+library(spdep)
 ```
 
 # Variabel
@@ -20,9 +22,7 @@ library(lmtest)
 # Model Regresi
 ```{r}
 if (!is.null(params$model)) {
-  cat("```\n")
-  print(summary(params$model))
-  cat("```\n")
+  knitr::kable(broom::tidy(params$model), caption = "Ringkasan Model Regresi")
 }
 ```
 
@@ -30,9 +30,7 @@ if (!is.null(params$model)) {
 ## Multikolinearitas
 ```{r}
 if (length(coef(params$model)) > 2) {
-  cat("```\n")
   print(vif(params$model))
-  cat("```\n")
 } else {
   cat("VIF tidak dihitung untuk satu variabel X.")
 }
@@ -40,9 +38,7 @@ if (length(coef(params$model)) > 2) {
 
 ## Normalitas Residual
 ```{r}
-cat("```\n")
 print(shapiro.test(resid(params$model)))
-cat("```\n")
 ```
 
 ```{r}
@@ -51,23 +47,36 @@ plot(params$model, which = 2)
 
 ## Homoskedastisitas (Breusch-Pagan)
 ```{r}
-cat("```\n")
 print(bptest(params$model))
-cat("```\n")
 ```
 
 ```{r}
 plot(params$model, which = 1)
 ```
 
+## Autokorelasi Spasial (Moran's I)
+```{r results='asis'}
+if (!is.null(params$weights_list)) {
+    print(moran.test(resid(params$model), listw = params$weights_list, zero.policy = TRUE))
+} else {
+  cat("Matriks pembobot spasial tidak tersedia untuk pengujian.")
+}
+
+```
+
 # Interpretasi
-```{r}
+```{r results='asis'}
 model <- params$model
 model_summary <- summary(model)
 
 p_shapiro <- shapiro.test(resid(model))$p.value
 p_bp <- bptest(model)$p.value
 vif_vals <- if(length(coef(model)) > 2) vif(model) else c(0)
+p_moran <- NA
+if (!is.null(params$weights_list)) {
+  moran_test_result <- moran.test(resid(params$model), listw = params$weights_list, zero.policy = TRUE)
+  p_moran <- moran_test_result$p.value
+}
 adj_r_sq <- model_summary$adj.r.squared
 f_stat <- model_summary$fstatistic
 p_f_stat <- if(!is.null(f_stat)) pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = FALSE) else 1
@@ -76,29 +85,27 @@ coef_summary <- model_summary$coefficients
 interpretasi_coef <- ""
 for (i in 2:nrow(coef_summary)) {
   var_name <- rownames(coef_summary)[i]
-  estimate <- coef_summary[i, 1]
   p_val <- coef_summary[i, 4]
   if (!is.na(p_val) && p_val < 0.05) {
-    arah <- if(estimate > 0) "menaikkan" else "menurunkan"
-    interpretasi_coef <- paste0(interpretasi_coef, "- Variabel ", var_name, " secara signifikan berpengaruh. Setiap kenaikan satu unit pada ", var_name, " akan ", arah, " ", params$y_var, " sebesar ", round(estimate, 4), ".\n")
+    interpretasi_coef <- paste0(interpretasi_coef, "- Variabel ", var_name, " berpengaruh signifikan.\n")
   }
 }
 if (interpretasi_coef == "") {
   interpretasi_coef <- "Tidak ada variabel independen yang berpengaruh signifikan.\n"
 }
 
-# Gabungkan semua teks menjadi satu variabel tunggal
 full_interpretation <- paste(
-  "Ringkasan Uji Asumsi:\n\n",
-  paste0("- Multikolinearitas: ", if(any(vif_vals > 10)) "Asumsi Terlanggar (VIF > 10).\n" else "Asumsi Terpenuhi (VIF < 10).\n"),
-  paste0("- Normalitas Residual: ", if(!is.na(p_shapiro) && p_shapiro < 0.05) "Tidak Normal (p < 0.05) alias Asumsi Terlanggar.\n" else "Normal (p >= 0.05) alias Asumsi Terpenuhi.\n"),
-  paste0("- Homoskedastisitas: ", if(!is.na(p_bp) && p_bp < 0.05) "Heteroskedastisitas (p < 0.05) alias Asumsi Terlanggar.\n\n" else "Homoskedastisitas (p >= 0.05) alias Asumsi Terpenuhi.\n\n"),
-  "Interpretasi Model:\n\n",
-  paste0("- Kelayakan Model (Uji-F): Model secara keseluruhan ", if(!is.na(p_f_stat) && p_f_stat < 0.05) "layak" else "tidak layak", " untuk digunakan (p = ", round(p_f_stat, 4), ").\n"),
-  paste0("- Koefisien Determinasi (Adjusted R-squared): Sebesar ", round(adj_r_sq * 100, 2), "% keragaman pada variabel '", params$y_var, "' dapat dijelaskan oleh model ini.\n\n"),
-  "Interpretasi Koefisien (Variabel yang Signifikan):\n\n",
+  "Ringkasan Uji Asumsi:\n",
+  paste0("- Multikolinearitas: ", if(any(vif_vals > 10, na.rm=TRUE)) "Asumsi Terlanggar.\n" else "Asumsi Terpenuhi.\n"),
+  paste0("- Normalitas Residual: ", if(!is.na(p_shapiro) && p_shapiro < 0.05) "Asumsi Terlanggar.\n" else "Asumsi Terpenuhi.\n"),
+  paste0("- Homoskedastisitas: ", if(!is.na(p_bp) && p_bp < 0.05) "Asumsi Terlanggar (heteroskedastisitas).\n" else "Asumsi Terpenuhi (homoskedastisitas).\n"),
+  paste0("- Autokorelasi Spasial: ", if(!is.na(p_moran) && p_moran < 0.05) "Asumsi Terlanggar (terdapat autokorelasi spasial).\n\n" else "Asumsi Terpenuhi (tidak ada autokorelasi spasial).\n\n"),
+  " Interpretasi Model:\n",
+  paste0("- Kelayakan Model (Uji-F): Model secara keseluruhan ", if(!is.na(p_f_stat) && p_f_stat < 0.05) "layak" else "tidak layak", " untuk digunakan.\n"),
+  paste0("- Koefisien Determinasi (Adjusted R-squared): Sebesar ", round(adj_r_sq * 100, 2), "% keragaman pada variabel '", params$y_var, "' dapat dijelaskan oleh model.\n\n"),
+  " Koefisien Signifikan:\n",
   interpretasi_coef
 )
-```
 
-`r full_interpretation`
+cat(full_interpretation)
+```

@@ -8,7 +8,7 @@ params:
   all_results: NULL
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, echo = FALSE, results = 'asis'}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 generate_interpretation <- function(test_obj, test_type, inputs) {
@@ -46,7 +46,9 @@ generate_interpretation <- function(test_obj, test_type, inputs) {
 }
 ```
 
-```{r}
+# Jenis Uji: Dua Arah
+
+```{r echo = FALSE, results = 'asis'}
 test_obj <- params$all_results$two.sided
 cat("```\n")
 print(test_obj)
@@ -55,7 +57,9 @@ cat("```\n")
 
 `r generate_interpretation(params$all_results$two.sided, params$test_type, params$inputs)`
 
-```{r}
+# Jenis Uji: Kurang Dari
+
+```{r echo = FALSE, results = 'asis'}
 test_obj <- params$all_results$less
 cat("```\n")
 print(test_obj)
@@ -64,7 +68,9 @@ cat("```\n")
 
 `r generate_interpretation(params$all_results$less, params$test_type, params$inputs)`
 
-```{r}
+# Jenis Uji: Lebih Dari
+
+```{r echo = FALSE, results = 'asis'}
 test_obj <- params$all_results$greater
 cat("```\n")
 print(test_obj)

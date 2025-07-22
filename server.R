@@ -1,432 +1,10 @@
-#                        LOAD PACKAGE YANG DIGUNAKAN                          #
-
-library(shiny)             # Framework dasar dashboard
-library(shinydashboard)    # Layout dashboard
-library(dplyr)             # Manipulasi data (select, filter, dll)
-library(sf)                # Membaca data spasial (.geojson)
-library(ggplot2)           # Visualisasi data statis
-library(DT)                # Tabel interaktif
-library(GGally)            # Untuk plot matriks korelasi (ggcorr)
-library(car)               # Uji asumsi (leveneTest, vif)
-library(lmtest)            # Uji asumsi (bptest)
-library(DescTools)         # Statistik deskriptif (Skew, Kurt)
-library(rmarkdown)         # Render laporan PDF
-library(writexl)           # Menulis file Excel (.xlsx)
-library(haven)             # Menulis file SPSS (.sav)
-library(shinycssloaders)   # Animasi loading pada output
-library(purrr)             # Fungsi iterasi elegan dengan map-style
-
-#                   LOAD DATA YANG DIGUNAKAN                                   #
-
-sovi_data <- read.csv2("data/sovi_data.csv")
-distance_matrix <- read.csv("data/distance.csv")
-indonesia_sf <- st_read("data/indonesia511.geojson")
-
-#                         USER INTERFACE (UI)                                 #
-
-ui <- dashboardPage(
-  skin = "blue",
-  dashboardHeader(title = "DataVerse SOVI"),
-  dashboardSidebar(
-    sidebarMenu(
-      id = "tabs",
-      menuItem("Beranda", tabName = "beranda", icon = icon("tachometer-alt")),
-      menuItem("Manajemen Data", tabName = "manajemen", icon = icon("sliders-h")),
-      menuItem("Eksplorasi Data", tabName = "eksplorasi", icon = icon("chart-bar")),
-      menuItem("Uji Asumsi Data", tabName = "uji_asumsi", icon = icon("check-circle")),
-      menuItem("Statistik Inferensia", icon = icon("flask"),
-               menuSubItem("Uji Beda Rata-rata", tabName = "rata_rata"),
-               menuSubItem("Uji Proporsi & Varians", tabName = "prop_var"),
-               menuSubItem("ANOVA", tabName = "anova")
-      ),
-      menuItem("Analisis Regresi", tabName = "regresi", icon = icon("chart-line")),
-      menuItem("Unduh Data", tabName = "unduh_data", icon = icon("download"))
-    )
-  ),
-  
-  dashboardBody(
-    tags$head(
-      tags$style(HTML("
-        .beranda-header { text-align: center; padding: 20px; margin-bottom: 20px; background-color: #f8f9fa; border: 1px solid #e3e3e3; border-radius: 8px; }
-        .beranda-header h2 { font-weight: 600; color: #3c8dbc; }
-        .guide-step { margin-bottom: 15px; display: flex; align-items: flex-start; }
-        .guide-step .icon-container { font-size: 22px; color: #3c8dbc; margin-right: 15px; width: 40px; text-align: center; padding-top: 2px; }
-        .guide-step .text-container { flex: 1; }
-        .guide-step strong { display: block; font-size: 16px; margin-bottom: 3px; }
-      "))
-    ),
-    tabItems(
-      tabItem(
-        tabName = "beranda",
-        fluidPage(
-          div(class = "beranda-header",
-              h2(icon("rocket"), " DataVerse: Visualisasi dan Analisis SOVI Indonesia"),
-              p(class = "lead", "Platform interaktif untuk eksplorasi data kerentanan sosial di seluruh Indonesia.")
-          ),
-          fluidRow(
-            valueBoxOutput("total_kabkota", width = 3),
-            valueBoxOutput("avg_poverty", width = 3),
-            valueBoxOutput("avg_noelectric", width = 3),
-            valueBoxOutput("total_populasi", width = 3)
-          ),
-          fluidRow(
-            column(width = 6,
-                   box(title = tagList(icon("info-circle"), " Tentang Dashboard Ini"), status = "primary", solidHeader = TRUE, width = NULL,
-                       p("Dashboard ini adalah alat bantu untuk memahami kerentanan sosial (SOVI) di Indonesia. Anda dapat melakukan berbagai analisis, mulai dari manajemen data mentah hingga analisis regresi yang kompleks, semuanya dalam satu tempat."),
-                       h4("Fitur Utama:"),
-                       tags$ul(
-                         tags$li("Manajemen dan kategorisasi data secara interaktif."),
-                         tags$li("Eksplorasi data melalui statistik deskriptif dan visualisasi."),
-                         tags$li("Pengujian asumsi statistik klasik untuk validitas data."),
-                         tags$li("Analisis inferensia (Uji-t, ANOVA, Uji Proporsi)."),
-                         tags$li("Pemodelan regresi linier dengan pemeriksaan asumsi."),
-                         tags$li("Unduh data dan laporan analisis dalam format PDF, CSV, Excel, atau SPSS.")
-                       )
-                   ),
-                   box(title = tagList(icon("book-reader"), " Panduan Penggunaan"), status = "primary", solidHeader = TRUE, width = NULL, collapsible = TRUE,
-                       div(class="guide-step", div(class="icon-container", icon("sliders-h")), div(class="text-container", strong("Manajemen Data:"), "Ubah variabel numerik menjadi kategorik dengan berbagai metode.")),
-                       div(class="guide-step", div(class="icon-container", icon("chart-bar")), div(class="text-container", strong("Eksplorasi Data:"), "Pilih variabel untuk melihat statistik, plot distribusi, dan korelasi.")),
-                       div(class="guide-step", div(class="icon-container", icon("check-circle")), div(class="text-container", strong("Uji Asumsi Data:"), "Periksa normalitas, homogenitas, dan outlier pada data Anda.")),
-                       div(class="guide-step", div(class="icon-container", icon("flask")), div(class="text-container", strong("Statistik Inferensia:"), "Lakukan uji beda rata-rata, proporsi, dan ANOVA untuk menarik kesimpulan.")),
-                       div(class="guide-step", div(class="icon-container", icon("chart-line")), div(class="text-container", strong("Analisis Regresi:"), "Bangun model regresi untuk melihat pengaruh antar variabel.")),
-                       div(class="guide-step", div(class="icon-container", icon("download")), div(class="text-container", strong("Unduh Data & Laporan:"), "Simpan data atau hasil analisis dalam berbagai format."))
-                   )
-            ),
-            column(width = 6,
-                   box(title = tagList(icon("database"), 
-                                       " Metadata Variabel"), 
-                       status = "primary", 
-                       solidHeader = TRUE, 
-                       width = NULL, 
-                       collapsible = TRUE,
-                       div(style = "overflow-x: auto;",
-                           HTML("<table class='table table-bordered table-hover'><thead style='background-color: #f4f4f4;'><tr><th>Variabel</th><th>Tipe Data</th><th>Deskripsi</th></tr></thead><tbody><tr><td><b>Province_Name</b></td><td>Teks (Character)</td><td>Nama provinsi di Indonesia</td></tr><tr><td><b>City_Name</b></td><td>Teks (Character)</td><td>Nama kabupaten/kota di Indonesia</td></tr><tr><td>DISTRICTCODE</td><td>Teks (Character)</td><td>Kode wilayah administratif kabupaten/kota</td></tr><tr><td>CHILDREN</td><td>Numerik (Persentase)</td><td>Persentase penduduk berusia di bawah lima tahun</td></tr><tr><td>FEMALE</td><td>Numerik (Persentase)</td><td>Persentase penduduk perempuan</td></tr><tr><td>ELDERLY</td><td>Numerik (Persentase)</td><td>Persentase penduduk berusia di atas 65 tahun</td></tr><tr><td>FHEAD</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga dengan kepala keluarga perempuan</td></tr><tr><td>FAMILYSIZE</td><td>Numerik (Rata-rata)</td><td>Rata-rata jumlah anggota rumah tangga</td></tr><tr><td>NOELECTRIC</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga tanpa listrik</td></tr><tr><td>LOWEDU</td><td>Numerik (Persentase)</td><td>Persentase penduduk usia 15+ dengan pendidikan rendah</td></tr><tr><td>GROWTH</td><td>Numerik (Persentase)</td><td>Persentase pertumbuhan penduduk</td></tr><tr><td>POVERTY</td><td>Numerik (Persentase)</td><td>Persentase penduduk miskin</td></tr><tr><td>ILLITERATE</td><td>Numerik (Persentase)</td><td>Persentase penduduk buta huruf</td></tr><tr><td>NOTRAINING</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga tanpa pelatihan kebencanaan</td></tr><tr><td>DPRONE</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga di daerah rawan bencana</td></tr><tr><td>RENTED</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga yang menyewa rumah</td></tr><tr><td>NOSEWER</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga tanpa sistem pembuangan limbah</td></tr><tr><td>TAPWATER</td><td>Numerik (Persentase)</td><td>Persentase rumah tangga pengguna air ledeng</td></tr><tr><td>POPULATION</td><td>Integer (Jumlah)</td><td>Total populasi di tiap kabupaten/kota</td></tr></tbody></table>")
-                       )
-                   )
-            )
-          )
-        )
-      ),
-      
-      tabItem(
-        tabName = "manajemen", 
-        fluidRow(
-          box(width = 4, 
-              title = "Pengaturan Kategorisasi", 
-              status = "primary", 
-              solidHeader = TRUE,
-              selectInput("var_kontinyu", 
-                          "1. Pilih Variabel Kontinyu:", 
-                          choices = names(sovi_data)[sapply(sovi_data, is.numeric)]),
-              selectInput("metode_kat", 
-                          "2. Pilih Metode Kategorisasi:",
-                          choices = c("Kuantil (Jumlah Anggota Sama)" = "quantile", "Interval Sama (Rentang Nilai Sama)" = "equal")),
-              numericInput("n_kat", 
-                           "3. Tentukan Jumlah Kategori:", 
-                           value = 3, 
-                           min = 2, 
-                           max = 10),
-              hr(),
-              helpText("4. Beri Nama untuk Setiap Kategori:"),
-              uiOutput("kat_labels_ui"),
-              br(),
-              actionButton("proses_kat", 
-                           "Proses Kategorisasi", 
-                           icon = icon("play"), 
-                           class = "btn-success")
-          ),
-          box(width = 8, 
-              title = "Hasil Kategorisasi", 
-              status = "info", 
-              solidHeader = TRUE,
-              DTOutput("tabel_kat"),
-              br(),
-              uiOutput("interpretasi_kat"),
-              hr(),
-              uiOutput("download_buttons_ui")
-          )
-        )
-      ),
-      
-      tabItem(tabName = "eksplorasi",
-              fluidRow(
-                box(title = "Pilih Variabel (Filter Utama)", 
-                    width = 12, 
-                    status = "primary", 
-                    solidHeader = TRUE,
-                    uiOutput("vars_selected_ui"),
-                    selectInput("var_plot", 
-                                "Variabel untuk Plot Tunggal:", 
-                                choices = NULL)
-                )
-              ),
-              fluidRow(box(title = "Statistik Deskriptif", 
-                           width = 12, 
-                           status = "info", 
-                           solidHeader = TRUE, 
-                           DT::dataTableOutput("tabel_stat") %>% withSpinner())),
-              fluidRow(
-                box(title = "Boxplot", 
-                    width = 4, 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    plotOutput("boxplot") %>% withSpinner()),
-                box(title = "QQ Plot", 
-                    width = 4, 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    plotOutput("qqplot") %>% withSpinner()),
-                box(title = "Histogram", 
-                    width = 4, 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    plotOutput("histplot") %>% withSpinner())
-              ),
-              fluidRow(box(title = "Matriks Korelasi", 
-                           width = 12, 
-                           status = "success", 
-                           solidHeader = TRUE, 
-                           plotOutput("corrplot") %>% withSpinner())),
-              fluidRow(box(title = "Interpretasi", 
-                           width = 12, 
-                           status = "primary", 
-                           solidHeader = TRUE, 
-                           verbatimTextOutput("interpretasi"))),
-              fluidRow(box(title = "Unduh Hasil PDF", 
-                           width = 12, 
-                           status = "danger", 
-                           solidHeader = TRUE, 
-                           downloadButton("downloadPDF", "Unduh PDF")))
-      ),
-      
-      tabItem(tabName = "uji_asumsi",
-              h2("Uji Asumsi Klasik"),
-              fluidRow(
-                box(title = "Treatment Data (Transformasi)", 
-                    status = "danger", 
-                    solidHeader = TRUE, 
-                    width = 12, 
-                    collapsible = TRUE, 
-                    collapsed = TRUE,
-                    p("Gunakan fitur ini jika variabel tidak lolos uji asumsi. Variabel baru hasil transformasi akan dapat digunakan di semua menu analisis."),
-                    fluidRow(
-                      column(width = 4,
-                             selectInput("var_to_transform", 
-                                         "1. Pilih Variabel untuk Treatment:", 
-                                         choices = NULL)
-                      ),
-                      column(width = 4,
-                             selectInput("transform_method_asumsi", 
-                                         "2. Pilih Metode Transformasi:",
-                                         choices = c("Logaritma (log1p)" = "log",
-                                                     "Akar Kuadrat (sqrt)" = "sqrt",
-                                                     "Arcsin Akar Kuadrat (untuk %)" = "arcsin_sqrt"))
-                      ),
-                      column(width = 4,
-                             textInput("new_var_name", 
-                                       "3. Nama Variabel Baru:", 
-                                       placeholder = "Contoh: POVERTY_log"),
-                             actionButton("apply_transform_button", 
-                                          "Terapkan Treatment", 
-                                          icon = icon("magic"), 
-                                          class = "btn-success")
-                      )
-                    )
-                )
-              ),
-              fluidRow(
-                box(title = "Pilih Variabel untuk Uji", 
-                    width = 12, 
-                    status = "primary", 
-                    solidHeader = TRUE,
-                    selectInput("var_asumsi", 
-                                "Variabel Uji:",
-                                choices = NULL)
-                )
-              ),
-              fluidRow(
-                box(width = 6, 
-                    title = "Uji Normalitas (Shapiro-Wilk)", 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    verbatimTextOutput("shapiro_test")),
-                box(width = 6, 
-                    title = "Uji Homogenitas Varians (Levene's Test)", 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    verbatimTextOutput("homogeneity_test"))
-              ),
-              fluidRow(
-                box(width = 6, 
-                    title = "Deteksi Outlier (Boxplot)", 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    plotOutput("outlier_plot")),
-                box(width = 6, 
-                    title = "Ringkasan Outlier", 
-                    status = "warning", 
-                    solidHeader = TRUE, 
-                    verbatimTextOutput("outlier_summary"))
-              ),
-              fluidRow(box(width = 12, status = "info", 
-                           solidHeader = TRUE, 
-                           title = "Ringkasan & Rekomendasi Statistik", 
-                           collapsible = TRUE, 
-                           verbatimTextOutput("interpretasiAsumsi"))),
-              fluidRow(box(width = 12, 
-                           status = "danger", 
-                           solidHeader = TRUE, 
-                           title = "Unduh Laporan Uji Asumsi", 
-                           downloadButton("downloadAsumsiPDF", "Unduh PDF Hasil Uji Asumsi")))
-      ),
-      
-      tabItem(tabName = "rata_rata",
-              h2("Uji Beda Rata-rata (t-test)"),
-              tabBox(
-                id = "ttest_tabs", width = 12,
-                tabPanel("Uji 1 Kelompok", fluidRow(
-                  box(width = 4, status = "primary", solidHeader = TRUE, title = "Pengaturan Analisis",
-                      selectInput("var_1samp", "Pilih Variabel Numerik:", choices = NULL),
-                      numericInput("mu_1samp", "Nilai Hipotesis (μ₀):", value = 10),
-                      radioButtons("alternative_1samp", "Hipotesis Alternatif:", choices = c("Dua Arah" = "two.sided", "Kurang Dari" = "less", "Lebih Dari" = "greater"), inline = TRUE),
-                      actionButton("run_1samp", "Jalankan", icon = icon("play"), class = "btn-success")
-                  ),
-                  box(width = 8, status = "info", solidHeader = TRUE, title = "Hasil Analisis", verbatimTextOutput("res_1samp") %>% withSpinner(), hr(), h4("Interpretasi:"), uiOutput("int_1samp") %>% withSpinner())
-                )),
-                tabPanel("Uji 2 Kelompok Independen", fluidRow(
-                  box(width = 4, status = "primary", solidHeader = TRUE, title = "Pengaturan Analisis",
-                      selectInput("var_2samp_num", "1. Variabel Numerik:", choices = NULL),
-                      selectInput("var_2samp_cat", "2. Variabel Grup:", choices = NULL),
-                      numericInput("split_val_2samp", "3. Titik Potong Grup:", value = 0),
-                      radioButtons("alternative_2samp", "Hipotesis Alternatif:", choices = c("Dua Arah" = "two.sided", "Kurang Dari" = "less", "Lebih Dari" = "greater"), inline = TRUE),
-                      actionButton("run_2samp", "Jalankan", icon = icon("play"), class = "btn-success")
-                  ),
-                  box(width = 8, status = "info", solidHeader = TRUE, title = "Hasil Analisis", verbatimTextOutput("res_2samp") %>% withSpinner(), hr(), h4("Interpretasi:"), uiOutput("int_2samp") %>% withSpinner())
-                ))
-              ),
-              fluidRow(box(width = 12, status = "danger", solidHeader = TRUE, title = "Unduh Laporan", downloadButton("downloadRataPDF", "Unduh PDF")))
-      ),
-      
-      tabItem(tabName = "prop_var",
-              h2("Uji Proporsi dan Uji Varians"),
-              tabBox(
-                id = "propvar_tabs", width = 12,
-                tabPanel("Uji Proporsi 1 Kelompok", fluidRow(
-                  box(width=4, status="primary", solidHeader=TRUE, title="Pengaturan",
-                      selectInput("var_prop1_konteks", "1. Konteks Variabel:", choices=NULL),
-                      numericInput("x_prop1_manual", "2. Jumlah 'Sukses' (x):", value=50, min=0),
-                      numericInput("n_prop1_manual", "3. Jumlah Total (n):", value=100, min=1),
-                      numericInput("p_prop1", "4. Proporsi Hipotesis (p₀):", value=0.5, min=0, max=1, step=0.01),
-                      radioButtons("alt_prop1", "Jenis Uji:", choices=c("Dua Arah"="two.sided", "Kurang Dari"="less", "Lebih Dari"="greater"), inline=TRUE),
-                      actionButton("run_prop1", "Jalankan", icon=icon("play"))
-                  ),
-                  box(width=8, status="info", solidHeader=TRUE, title="Hasil Analisis", verbatimTextOutput("res_prop1") %>% withSpinner(), uiOutput("int_prop1") %>% withSpinner())
-                )),
-                tabPanel("Uji Proporsi 2 Kelompok", fluidRow(
-                  box(width=4, status="primary", solidHeader=TRUE, title="Pengaturan",
-                      h5("Definisi 'Sukses'"),
-                      selectInput("var_prop2_cond", "1. Variabel Kondisi:", choices=NULL),
-                      textInput("cond_prop2_text", "2. Kondisi 'Sukses':", value="> 10"), hr(), h5("Definisi Grup"),
-                      selectInput("var_prop2_group", "3. Variabel Grup:", choices=NULL),
-                      helpText("Grup dibagi otomatis berdasarkan median."), hr(),
-                      radioButtons("alt_prop2", "Jenis Uji:", choices=c("Dua Arah"="two.sided", "Kurang Dari"="less", "Lebih Dari"="greater"), inline=TRUE),
-                      actionButton("run_prop2", "Jalankan", icon=icon("play"))
-                  ),
-                  box(width=8, status="info", solidHeader=TRUE, title="Hasil Analisis", verbatimTextOutput("res_prop2") %>% withSpinner(), uiOutput("int_prop2") %>% withSpinner())
-                )),
-                tabPanel("Uji Varians 2 Kelompok (F-test)", fluidRow(
-                  box(width=4, status="primary", solidHeader=TRUE, title="Pengaturan",
-                      selectInput("var1_ftest", "Variabel Kelompok 1:", choices=NULL),
-                      selectInput("var2_ftest", "Variabel Kelompok 2:", choices=NULL),
-                      radioButtons("alt_ftest", "Jenis Uji:", choices=c("Dua Arah"="two.sided", "Kurang Dari"="less", "Lebih Dari"="greater"), inline=TRUE),
-                      actionButton("run_ftest", "Jalankan", icon=icon("play"))
-                  ),
-                  box(width=8, status="info", solidHeader=TRUE, title="Hasil Analisis", verbatimTextOutput("res_ftest") %>% withSpinner(), uiOutput("int_ftest") %>% withSpinner())
-                ))
-              ),
-              fluidRow(box(width = 12, status = "danger", solidHeader = TRUE, title = "Unduh Laporan", downloadButton("downloadPropVarPDF", "Unduh PDF")))
-      ),      
-      
-      tabItem(tabName = "anova",
-              h2("Analisis Varians (ANOVA)"),
-              tabBox(
-                id = "anova_tabs", width = 12,
-                tabPanel("ANOVA 1 Arah", fluidRow(
-                  box(width=4, status="primary", solidHeader=TRUE, title="Pengaturan",
-                      selectInput("var_anova1_dv", "1. Variabel Dependen:", choices=NULL),
-                      selectInput("var_anova1_iv", "2. Variabel Independen:", choices=NULL),
-                      helpText("Variabel independen akan dibagi menjadi 3 grup."),
-                      actionButton("run_anova1", "Jalankan", icon=icon("play"))
-                  ),
-                  box(width=8, status="warning", solidHeader=TRUE, title="Pemeriksaan Asumsi", uiOutput("asumsi_anova1_status") %>% withSpinner())
-                ), fluidRow(
-                  box(width=12, status="info", solidHeader=TRUE, title="Hasil Analisis", verbatimTextOutput("res_anova1") %>% withSpinner(),
-                      h4("Uji Lanjutan (Tukey HSD)"), verbatimTextOutput("res_posthoc_anova1") %>% withSpinner(), h4("Interpretasi"), uiOutput("int_anova1") %>% withSpinner()
-                  )
-                )),
-                tabPanel("ANOVA 2 Arah", fluidRow(
-                  box(width=4, status="primary", solidHeader=TRUE, title="Pengaturan",
-                      selectInput("var_anova2_dv", "1. Variabel Dependen:", choices=NULL),
-                      selectInput("var_anova2_iv1", "2. Variabel Independen #1:", choices=NULL),
-                      selectInput("var_anova2_iv2", "3. Variabel Independen #2:", choices=NULL),
-                      helpText("Variabel independen akan dibagi menjadi grup Rendah/Tinggi."),
-                      actionButton("run_anova2", "Jalankan", icon=icon("play"))
-                  ),
-                  box(width=8, status="warning", solidHeader=TRUE, title="Pemeriksaan Asumsi", uiOutput("asumsi_anova2_status") %>% withSpinner())
-                ), fluidRow(
-                  box(width=12, status="info", solidHeader=TRUE, title="Hasil Analisis", verbatimTextOutput("res_anova2") %>% withSpinner(),
-                      h4("Uji Lanjutan (Tukey HSD)"), verbatimTextOutput("res_posthoc_anova2") %>% withSpinner(), h4("Interpretasi"), uiOutput("int_anova2") %>% withSpinner()
-                  )
-                ))
-              ),
-              fluidRow(box(width=12, status="danger", solidHeader=TRUE, title="Unduh Laporan", downloadButton("downloadAnovaPDF", "Unduh PDF")))
-      ),
-      
-      tabItem(tabName = "regresi",
-              h2("Analisis Regresi Linier"),
-              fluidRow(
-                box(width = 4, status = "primary", solidHeader = TRUE, title = "Pengaturan Analisis",
-                    selectInput("y_reg", "1. Variabel Dependen (Y):", choices = NULL),
-                    selectInput("x_reg", "2. Variabel Independen (X):", choices = NULL, multiple = TRUE),
-                    hr(), h4("Transformasi Variabel (Opsional)"),
-                    selectInput("var_transform", "Pilih variabel untuk ditransformasi:", choices = NULL, multiple = TRUE),
-                    selectInput("transform_method", "Jenis transformasi:", choices = c("Tidak Ada" = "None", "Logaritma" = "Log", "Akar Kuadrat" = "Sqrt")),
-                    actionButton("run_analysis", "Jalankan", icon = icon("play"), class = "btn-success")
-                ),
-                box(width = 8, tabsetPanel(
-                  tabPanel("Ringkasan Model", verbatimTextOutput("reg_summary") %>% withSpinner()),
-                  tabPanel("Uji Asumsi", 
-                           h4("Multikolinearitas (VIF)"), verbatimTextOutput("vif_result"), hr(),
-                           h4("Normalitas Residual"), plotOutput("qq_plot", height = "300px"), verbatimTextOutput("shapiro_result"), hr(),
-                           h4("Homoskedastisitas"), plotOutput("resid_plot", height = "300px"), verbatimTextOutput("bp_result"), hr(),
-                           h4("Autokorelasi (Durbin-Watson)"),verbatimTextOutput("dw_result")
-                  ),
-                  tabPanel("Interpretasi Otomatis", uiOutput("interpretasi_regresi") %>% withSpinner())
-                ))
-              ),
-              fluidRow(box(width = 12, status = "danger", solidHeader = TRUE, title = "Unduh Laporan", downloadButton("downloadRegresiPDF", "Unduh PDF")))
-      ),
-      
-      tabItem(tabName = "unduh_data",
-              h2("Unduh Data Pilihan"),
-              fluidRow(
-                box(width = 12, status = "primary", solidHeader = TRUE, title = "Pengaturan Unduhan",
-                    uiOutput("vars_unduh_ui"),
-                    radioButtons(inputId = "format_unduh", label = "Format File:", choices = c("CSV" = "csv", "Excel (XLSX)" = "xlsx", "SPSS (SAV)" = "sav"), selected = "csv", inline = TRUE),
-                    downloadButton("download_data_button", "Unduh Data")
-                )
-              ),
-              fluidRow(box(width = 12, status = "info", solidHeader = TRUE, title = "Pratinjau Data", DTOutput("tabel_preview_unduh") %>% withSpinner()))
-      )
-    )
-  )
-)
-
 #                              SERVER LOGIC                                   #
 
 server <- function(input, output, session) {
   data_reaktif <- reactiveVal(sovi_data)
   data_kategori <- reactiveVal(NULL)
+  neighbors <- poly2nb(indonesia_sf, queen = TRUE)
+  weights_list <- nb2listw(neighbors, style = "W", zero.policy = TRUE)
   
   # Observer untuk sinkronisasi input
   observe({
@@ -605,7 +183,7 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       haven::write_sav(data_kategori(), path = file)
-  })
+    })
   
   data_filtered <- reactive({
     req(input$vars_selected)
@@ -1216,7 +794,7 @@ server <- function(input, output, session) {
     df1 <- anova_summary[[1]]$`Df`[1]
     df2 <- anova_summary[[1]]$`Df`[2]
     p_value <- anova_summary[[1]]$`Pr(>F)`[1]
-
+    
     posthoc_res <- if (!is.na(p_value) && p_value < 0.05) TukeyHSD(anova_model) else NULL
     
     output$res_anova1 <- renderPrint({ print(anova_summary) })
@@ -1278,16 +856,16 @@ server <- function(input, output, session) {
     })
     
     anova_summary <- summary(model_res)
-
+    
     stats <- anova_summary[[1]]
     iv1_f <- stats$`F value`[1]; iv1_df1 <- stats$`Df`[1]; iv1_df2 <- stats$`Df`[3]; iv1_p <- stats$`Pr(>F)`[1]
     iv2_f <- stats$`F value`[2]; iv2_df1 <- stats$`Df`[2]; iv2_df2 <- stats$`Df`[3]; iv2_p <- stats$`Pr(>F)`[2]
     int_f <- stats$`F value`[3]; int_df1 <- stats$`Df`[3]; int_df2 <- stats$`Df`[3]; int_p <- stats$`Pr(>F)`[3]
     
-    iv1_interp <- paste0("<li><b>Efek Utama ", input$var_anova2_iv1, ":</b> ", if(iv1_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", iv1_df1, ", ", iv1_df2, ") = ", round(iv1_f, 2), ", p = ", round(iv1_p, 3), ".</li>")
-    iv2_interp <- paste0("<li><b>Efek Utama ", input$var_anova2_iv2, ":</b> ", if(iv2_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", iv2_df1, ", ", iv2_df2, ") = ", round(iv2_f, 2), ", p = ", round(iv2_p, 3), ".</li>")
-    int_interp <- paste0("<li><b>Efek Interaksi:</b> ", if(int_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", int_df1, ", ", int_df2, ") = ", round(int_f, 2), ", p = ", round(int_p, 3), ".</li>")
-    
+    iv1_interp <- paste0("<li><b>Efek Utama ", input$var_anova2_iv1, ":</b> ", if(!is.na(iv1_p) && iv1_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", iv1_df1, ", ", iv1_df2, ") = ", round(iv1_f, 2), ", p = ", round(iv1_p, 3), ".</li>")
+    iv2_interp <- paste0("<li><b>Efek Utama ", input$var_anova2_iv2, ":</b> ", if(!is.na(iv2_p) && iv2_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", iv2_df1, ", ", iv2_df2, ") = ", round(iv2_f, 2), ", p = ", round(iv2_p, 3), ".</li>")
+    int_interp <- paste0("<li><b>Efek Interaksi:</b> ", if(!is.na(int_p) && int_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", int_df1, ", ", int_df2, ") = ", round(int_f, 2), ", p = ", round(int_p, 3), ".</li>")
+
     interpretation_text <- paste0("<ul>", iv1_interp, iv2_interp, int_interp, "</ul>")
     
     posthoc_res <- if (any(stats$`Pr(>F)` < 0.05, na.rm = TRUE)) TukeyHSD(model_res) else NULL
@@ -1394,7 +972,10 @@ server <- function(input, output, session) {
   
   output$bp_result <- renderPrint({ lmtest::bptest(model_fit()) })
   
-  output$dw_result <- renderPrint({ req(model_fit()); lmtest::dwtest(model_fit())})
+  output$moran_result <- renderPrint({
+    req(model_fit())
+    moran.test(resid(model_fit()), listw = weights_list, zero.policy = TRUE)
+  })
   
   output$interpretasi_regresi <- renderUI({
     model <- model_fit(); model_summary <- summary(model)
@@ -1403,9 +984,9 @@ server <- function(input, output, session) {
     p_bp <- lmtest::bptest(model)$p.value
     vif_vals <- if(length(coef(model)) > 2) car::vif(model) else c(0)
     
-    dw_test <- lmtest::dwtest(model)
-    p_dw <- dw_test$p.value
-
+    moran_test <- moran.test(resids, listw = weights_list, zero.policy = TRUE)
+    p_moran <- moran_test$p.value
+    
     adj_r_sq <- model_summary$adj.r.squared
     f_stat <- model_summary$fstatistic
     p_f_stat <- if(!is.null(f_stat)) pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = FALSE) else 1
@@ -1416,10 +997,10 @@ server <- function(input, output, session) {
       paste0("<li><b>Multikolinearitas (VIF):</b> ", if(any(vif_vals > 10)) "Asumsi Terlanggar (VIF > 10)." else "Asumsi terpenuhi (VIF < 10).", "</li>"),
       paste0("<li><b>Normalitas Residual (Shapiro-Wilk):</b> ", if(!is.na(p_shapiro) && p_shapiro < 0.05) "Asumsi terlanggar (p < 0.05)." else "Asumsi terpenuhi (p ≥ 0.05).", "</li>"),
       paste0("<li><b>Homoskedastisitas (Breusch-Pagan):</b> ", if(!is.na(p_bp) && p_bp < 0.05) "Asumsi terlanggar (terjadi heteroskedastisitas)." else "Asumsi terpenuhi (homoskedastisitas).", "</li>"),
-      paste0("<li><b>Autokorelasi (Durbin-Watson):</b> ", if(!is.na(p_dw) && p_dw < 0.05) "Asumsi terlanggar (terdapat autokorelasi positif)." else "Asumsi terpenuhi (tidak ada autokorelasi).", "</li>"),
+      paste0("<li><b>Autokorelasi Spasial (Moran's I):</b> ", if(!is.na(p_moran) && p_moran < 0.05) "Asumsi terlanggar (terdapat autokorelasi spasial)." else "Asumsi terpenuhi (tidak ada autokorelasi spasial).", "</li>"),
       "</ul>"
     )
-
+    
     html_model <- paste(
       "<h4>Interpretasi Kelayakan Model</h4><ul>",
       paste0("<li><b>Kelayakan Model (Uji-F):</b> Berdasarkan Uji F, model secara keseluruhan ", if(!is.na(p_f_stat) && p_f_stat < 0.05) "<b>layak (signifikan)</b>" else "<b>tidak layak (tidak signifikan)</b>", " untuk digunakan (p = ", round(p_f_stat, 4), ").</li>"),
@@ -1453,7 +1034,7 @@ server <- function(input, output, session) {
       tempReport <- file.path(tempdir(), "Laporan-Regresi.Rmd")
       file.copy("www/Laporan-Regresi.Rmd", tempReport, overwrite = TRUE)
       
-      params <- list(model = model_fit(), y_var = input$y_reg, x_vars = input$x_reg)
+      params <- list(model = model_fit(), y_var = input$y_reg, x_vars = input$x_reg, weights_list = weights_list)
       
       rmarkdown::render(tempReport, output_file = file, params = params, envir = new.env(parent=globalenv()))
     })
@@ -1483,7 +1064,3 @@ server <- function(input, output, session) {
       }
     })
 }
-
-#                             JALANKAN APLIKASI                               #
-
-shinyApp(ui, server)
