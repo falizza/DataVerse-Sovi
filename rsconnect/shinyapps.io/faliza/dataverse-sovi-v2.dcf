@@ -1,0 +1,10 @@
+name: dataverse-sovi-v2
+title:
+username: faliza
+account: faliza
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15110924
+bundleId:
+url: https://faliza.shinyapps.io/dataverse-sovi-v2/
+version: 1

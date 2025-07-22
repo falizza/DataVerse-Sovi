@@ -22,16 +22,6 @@ ui <- dashboardPage(
   ),
   
   dashboardBody(
-    tags$head(
-      tags$style(HTML("
-        .beranda-header { text-align: center; padding: 20px; margin-bottom: 20px; background-color: #f8f9fa; border: 1px solid #e3e3e3; border-radius: 8px; }
-        .beranda-header h2 { font-weight: 600; color: #3c8dbc; }
-        .guide-step { margin-bottom: 15px; display: flex; align-items: flex-start; }
-        .guide-step .icon-container { font-size: 22px; color: #3c8dbc; margin-right: 15px; width: 40px; text-align: center; padding-top: 2px; }
-        .guide-step .text-container { flex: 1; }
-        .guide-step strong { display: block; font-size: 16px; margin-bottom: 3px; }
-      "))
-    ),
     tabItems(
       tabItem(
         tabName = "beranda",
@@ -422,5 +412,16 @@ ui <- dashboardPage(
               fluidRow(box(width = 12, status = "info", solidHeader = TRUE, title = "Pratinjau Data", DTOutput("tabel_preview_unduh") %>% withSpinner()))
       )
     )
+  ),
+  tags$head(
+    tags$style(HTML("
+        .content-wrapper { background-color: #ffffff; }
+        .beranda-header { text-align: center; padding: 20px; margin-bottom: 20px; background-color: #f8f9fa; border: 1px solid #e3e3e3; border-radius: 8px; }
+        .beranda-header h2 { font-weight: 600; color: #3c8dbc; }
+        .guide-step { margin-bottom: 15px; display: flex; align-items: flex-start; }
+        .guide-step .icon-container { font-size: 22px; color: #3c8dbc; margin-right: 15px; width: 40px; text-align: center; padding-top: 2px; }
+        .guide-step .text-container { flex: 1; }
+        .guide-step strong { display: block; font-size: 16px; margin-bottom: 3px; }
+      "))
   )
 )

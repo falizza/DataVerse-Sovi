@@ -52,10 +52,10 @@ server <- function(input, output, session) {
   })
   
   # Menu Beranda
-  output$total_kabkota <- renderValueBox({ valueBox(nrow(data_reaktif()), "Total Kabupaten/Kota", icon = icon("map-marked-alt"), color = "primary") })
-  output$avg_poverty <- renderValueBox({ valueBox(paste0(round(mean(data_reaktif()$POVERTY, na.rm = TRUE), 2), "%"), "Rata-rata Kemiskinan", icon = icon("users"), color = "danger") })
-  output$avg_noelectric <- renderValueBox({ valueBox(paste0(round(mean(data_reaktif()$NOELECTRIC, na.rm = TRUE), 2), "%"), "RT Tanpa Listrik", icon = icon("bolt"), color = "warning") })
-  output$total_populasi <- renderValueBox({ valueBox(format(sum(as.numeric(data_reaktif()$POPULATION), na.rm = TRUE), big.mark = ",", scientific = FALSE), "Total Populasi", icon = icon("user-friends"), color = "success") })
+  output$total_kabkota <- renderValueBox({ valueBox(nrow(data_reaktif()), "Total Kabupaten/Kota", icon = icon("map-marked-alt"), color = "blue") })
+  output$avg_poverty <- renderValueBox({ valueBox(paste0(round(mean(data_reaktif()$POVERTY, na.rm = TRUE), 2), "%"), "Rata-rata Kemiskinan", icon = icon("users"), color = "red") })
+  output$avg_noelectric <- renderValueBox({ valueBox(paste0(round(mean(data_reaktif()$NOELECTRIC, na.rm = TRUE), 2), "%"), "RT Tanpa Listrik", icon = icon("bolt"), color = "yellow") })
+  output$total_populasi <- renderValueBox({ valueBox(format(sum(as.numeric(data_reaktif()$POPULATION), na.rm = TRUE), big.mark = ",", scientific = FALSE), "Total Populasi", icon = icon("user-friends"), color = "green") })
   
   
   # Menu Manajemen Data
@@ -112,7 +112,7 @@ server <- function(input, output, session) {
       })
       
       tagList(
-        h4("📌 Interpretasi Hasil Kategorisasi:"),
+        h4("Interpretasi Hasil Kategorisasi:"),
         p("Variabel", tags$b(input$var_kontinyu), "telah dikategorikan menjadi", 
           tags$b(input$n_kat), "kelompok menggunakan metode", tags$b(metode_terpilih), "."),
         hr(),
