@@ -3,6 +3,8 @@
 server <- function(input, output, session) {
   data_reaktif <- reactiveVal(sovi_data)
   data_kategori <- reactiveVal(NULL)
+  
+  # Membuat matriks pembobot spasial (hanya sekali saat aplikasi dimulai)
   neighbors <- poly2nb(indonesia_sf, queen = TRUE)
   weights_list <- nb2listw(neighbors, style = "W", zero.policy = TRUE)
   
@@ -15,6 +17,8 @@ server <- function(input, output, session) {
     
     # 1. Update Menu Eksplorasi Data
     updateSelectInput(session, "var_plot", choices = pilihan_semua, selected = pilihan_semua[1])
+    
+    updateSelectInput(session, "var_peta", choices = pilihan_numerik, selected = pilihan_numerik[1])
     
     # 2. Update Menu Uji Asumsi
     updateSelectInput(session, "var_asumsi", choices = pilihan_numerik, selected = pilihan_numerik[1])
@@ -48,44 +52,11 @@ server <- function(input, output, session) {
   })
   
   # Menu Beranda
-  output$total_kabkota <- renderValueBox({
-    valueBox(
-      value = nrow(data_reaktif()),
-      subtitle = "Total Kabupaten/Kota",
-      icon = icon("map-marked-alt"),
-      color = "primary" 
-    )
-  })
+  output$total_kabkota <- renderValueBox({ valueBox(nrow(data_reaktif()), "Total Kabupaten/Kota", icon = icon("map-marked-alt"), color = "primary") })
+  output$avg_poverty <- renderValueBox({ valueBox(paste0(round(mean(data_reaktif()$POVERTY, na.rm = TRUE), 2), "%"), "Rata-rata Kemiskinan", icon = icon("users"), color = "danger") })
+  output$avg_noelectric <- renderValueBox({ valueBox(paste0(round(mean(data_reaktif()$NOELECTRIC, na.rm = TRUE), 2), "%"), "RT Tanpa Listrik", icon = icon("bolt"), color = "warning") })
+  output$total_populasi <- renderValueBox({ valueBox(format(sum(as.numeric(data_reaktif()$POPULATION), na.rm = TRUE), big.mark = ",", scientific = FALSE), "Total Populasi", icon = icon("user-friends"), color = "success") })
   
-  output$avg_poverty <- renderValueBox({
-    avg_pov <- mean(data_reaktif()$POVERTY, na.rm = TRUE)
-    valueBox(
-      value = paste0(round(avg_pov, 2), "%"),
-      subtitle = "Rata-rata Kemiskinan",
-      icon = icon("users"),
-      color = "danger"  
-    )
-  })
-  
-  output$avg_noelectric <- renderValueBox({
-    avg_noelec <- mean(data_reaktif()$NOELECTRIC, na.rm = TRUE)
-    valueBox(
-      value = paste0(round(avg_noelec, 2), "%"),
-      subtitle = "RT Tanpa Listrik",
-      icon = icon("bolt"),
-      color = "warning"
-    )
-  })
-  
-  output$total_populasi <- renderValueBox({
-    total_pop <- sum(as.numeric(data_reaktif()$POPULATION), na.rm = TRUE)
-    valueBox(
-      value = format(total_pop, big.mark = ",", scientific = FALSE),
-      subtitle = "Total Populasi Terdata",
-      icon = icon("user-friends"),
-      color = "success" 
-    )
-  })
   
   # Menu Manajemen Data
   output$kat_labels_ui <- renderUI({
@@ -353,6 +324,119 @@ server <- function(input, output, session) {
       )
     }
   )
+  
+  # Menu Peta
+  peta_data <- reactive({
+    # Pilih hanya kolom identitas & geometri dari data spasial untuk menghindari duplikasi kolom
+    indonesia_sf_geom <- dplyr::select(indonesia_sf, kodeprkab, nmkab, nmprov)
+    
+    # Gabungkan dengan data reaktif. Semua kolom data (POVERTY, RENTED, dll.) akan
+    # berasal dari data_reaktif() tanpa ada akhiran .x atau .y
+    left_join(indonesia_sf_geom, data_reaktif(), by = c("kodeprkab" = "DISTRICTCODE"))
+  })
+  
+  # 2. Render Peta Leaflet
+  output$peta_leaflet <- renderLeaflet({
+    req(input$var_peta)
+    map_data <- peta_data()
+    
+    # Pastikan variabel yang dipilih ada di data
+    if (!input$var_peta %in% names(map_data)) return(NULL)
+    
+    # Filter baris dengan nilai NA pada variabel terpilih agar palet warna dan popup tidak error
+    map_data_filtered <- map_data[!is.na(map_data[[input$var_peta]]), ]
+    
+    # Jika tidak ada data sama sekali, tampilkan peta kosong
+    if (nrow(map_data_filtered) == 0) {
+      return(leaflet() %>% addProviderTiles(providers$CartoDB.Positron) %>% setView(lng = 118, lat = -2, zoom = 5))
+    }
+    
+    # Membuat palet warna numerik dari kuning ke merah
+    pal <- colorNumeric(
+      palette = "YlOrRd",
+      domain = map_data_filtered[[input$var_peta]]
+    )
+    
+    # Membuat label untuk ditampilkan saat kursor diarahkan ke wilayah
+    labels <- sprintf(
+      "<strong>%s, %s</strong><br/>%s: %s",
+      map_data_filtered$nmkab,
+      map_data_filtered$nmprov,
+      input$var_peta,
+      format(round(map_data_filtered[[input$var_peta]], 2), nsmall = 2, big.mark = ",")
+    ) %>% lapply(htmltools::HTML)
+    
+    leaflet(data = map_data_filtered) %>%
+      addProviderTiles(providers$CartoDB.Positron, group = "Peta Dasar") %>%
+      setView(lng = 118, lat = -2, zoom = 5) %>%
+      addPolygons(
+        fillColor = ~pal(get(input$var_peta)),
+        weight = 1,
+        opacity = 1,
+        color = "white",
+        dashArray = "3",
+        fillOpacity = 0.7,
+        highlightOptions = highlightOptions(
+          weight = 3,
+          color = "#666",
+          dashArray = "",
+          fillOpacity = 0.9,
+          bringToFront = TRUE
+        ),
+        label = labels,
+        labelOptions = labelOptions(
+          style = list("font-weight" = "normal", padding = "3px 8px"),
+          textsize = "15px",
+          direction = "auto"
+        )
+      ) %>%
+      addLegend(
+        pal = pal,
+        values = ~get(input$var_peta),
+        opacity = 0.7,
+        title = input$var_peta,
+        position = "bottomright"
+      )
+  })
+  
+  # 3. Render Interpretasi Peta
+  output$interpretasi_peta <- renderUI({
+    req(input$var_peta)
+    
+    # Hapus geometri untuk manipulasi data frame biasa (lebih cepat)
+    df <- as.data.frame(peta_data()) %>%
+      dplyr::select(nmkab, nmprov, variable = !!sym(input$var_peta)) %>%
+      dplyr::filter(!is.na(variable))
+    
+    if(nrow(df) < 5) return(p("Data tidak cukup untuk menampilkan interpretasi."))
+    
+    # Ambil 3 wilayah dengan nilai tertinggi dan terendah
+    top3 <- df %>% arrange(desc(variable)) %>% head(3)
+    bottom3 <- df %>% arrange(variable) %>% head(3)
+    
+    tagList(
+      h4("Analisis Spasial Sederhana"),
+      p("Peta ini menunjukkan sebaran spasial untuk variabel", tags$b(input$var_peta), 
+        "di seluruh kabupaten/kota di Indonesia. Warna yang lebih gelap (merah) menunjukkan nilai yang lebih tinggi."),
+      hr(),
+      h5(tags$b(icon("arrow-up", class="text-danger"), " 3 Wilayah dengan Nilai Tertinggi:")),
+      tags$ul(
+        lapply(1:nrow(top3), function(i) {
+          tags$li(paste0(top3$nmkab[i], " (", top3$nmprov[i], "): ", round(top3$variable[i], 2)))
+        })
+      ),
+      hr(),
+      h5(tags$b(icon("arrow-down", class="text-success"), " 3 Wilayah dengan Nilai Terendah:")),
+      tags$ul(
+        lapply(1:nrow(bottom3), function(i) {
+          tags$li(paste0(bottom3$nmkab[i], " (", bottom3$nmprov[i], "): ", round(bottom3$variable[i], 2)))
+        })
+      ),
+      hr(),
+      p(tags$i("Arahkan kursor pada sebuah wilayah di peta untuk melihat nilai spesifiknya."))
+    )
+  })
+  
   
   # Menu Uji Asumsi Data
   observeEvent(input$apply_transform_button, {

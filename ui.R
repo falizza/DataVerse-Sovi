@@ -9,6 +9,7 @@ ui <- dashboardPage(
       menuItem("Beranda", tabName = "beranda", icon = icon("tachometer-alt")),
       menuItem("Manajemen Data", tabName = "manajemen", icon = icon("sliders-h")),
       menuItem("Eksplorasi Data", tabName = "eksplorasi", icon = icon("chart-bar")),
+      menuItem("Peta Interaktif", tabName = "peta", icon = icon("map-marked-alt")),
       menuItem("Uji Asumsi Data", tabName = "uji_asumsi", icon = icon("check-circle")),
       menuItem("Statistik Inferensia", icon = icon("flask"),
                menuSubItem("Uji Beda Rata-rata", tabName = "rata_rata"),
@@ -173,6 +174,32 @@ ui <- dashboardPage(
                            status = "danger", 
                            solidHeader = TRUE, 
                            downloadButton("downloadPDF", "Unduh PDF")))
+      ),
+      
+      tabItem(tabName = "peta",
+              h2("Peta Sebaran Data Kerentanan Sosial"),
+              fluidRow(
+                box(
+                  width = 12, status = "primary", solidHeader = TRUE,
+                  title = "Pengaturan Peta",
+                  # Pilihan variabel untuk peta, akan diupdate dari server
+                  selectInput("var_peta", "Pilih Variabel untuk Ditampilkan:", choices = NULL)
+                )
+              ),
+              fluidRow(
+                box(
+                  width = 8, status = "info", solidHeader = TRUE,
+                  title = "Peta Interaktif",
+                  # Output untuk peta Leaflet
+                  leafletOutput("peta_leaflet", height = "600px") %>% withSpinner()
+                ),
+                box(
+                  width = 4, status = "success", solidHeader = TRUE,
+                  title = "Interpretasi Peta",
+                  # Output untuk teks interpretasi
+                  uiOutput("interpretasi_peta")
+                )
+              )
       ),
       
       tabItem(tabName = "uji_asumsi",

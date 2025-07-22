@@ -20,5 +20,7 @@ library(spdep)             # Untuk Uji Autokorelasi Spasial (Moran's I)
 #                   LOAD DATA YANG DIGUNAKAN                                   #
 
 sovi_data <- read.csv2("data/sovi_data.csv")
+sovi_data$DISTRICTCODE <- as.character(sovi_data$DISTRICTCODE)
 distance_matrix <- read.csv("data/distance.csv")
 indonesia_sf <- st_read("data/indonesia511.geojson")
+indonesia_sf$kdkab <- as.character(indonesia_sf$kodeprkab)
