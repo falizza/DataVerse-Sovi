@@ -154,13 +154,7 @@ ui <- dashboardPage(
                     width = 12, 
                     status = "primary", 
                     solidHeader = TRUE,
-                    selectInput("vars_selected", 
-                                "Pilih variabel yang akan digunakan di semua menu analisis:", 
-                                choices = names(sovi_data), 
-                                multiple = TRUE, 
-                                selectize = TRUE,
-                                selected = names(sovi_data)[sapply(sovi_data, is.numeric)]), 
-                    
+                    uiOutput("vars_selected_ui"),
                     selectInput("var_plot", 
                                 "Variabel untuk Plot Tunggal:", 
                                 choices = NULL)
@@ -207,6 +201,39 @@ ui <- dashboardPage(
       
       tabItem(tabName = "uji_asumsi",
               h2("Uji Asumsi Klasik"),
+              fluidRow(
+                box(title = "Treatment Data (Transformasi)", 
+                    status = "danger", 
+                    solidHeader = TRUE, 
+                    width = 12, 
+                    collapsible = TRUE, 
+                    collapsed = TRUE,
+                    p("Gunakan fitur ini jika variabel tidak lolos uji asumsi. Variabel baru hasil transformasi akan dapat digunakan di semua menu analisis."),
+                    fluidRow(
+                      column(width = 4,
+                             selectInput("var_to_transform", 
+                                         "1. Pilih Variabel untuk Treatment:", 
+                                         choices = NULL)
+                      ),
+                      column(width = 4,
+                             selectInput("transform_method_asumsi", 
+                                         "2. Pilih Metode Transformasi:",
+                                         choices = c("Logaritma (log1p)" = "log",
+                                                     "Akar Kuadrat (sqrt)" = "sqrt",
+                                                     "Arcsin Akar Kuadrat (untuk %)" = "arcsin_sqrt"))
+                      ),
+                      column(width = 4,
+                             textInput("new_var_name", 
+                                       "3. Nama Variabel Baru:", 
+                                       placeholder = "Contoh: POVERTY_log"),
+                             actionButton("apply_transform_button", 
+                                          "Terapkan Treatment", 
+                                          icon = icon("magic"), 
+                                          class = "btn-success")
+                      )
+                    )
+                )
+              ),
               fluidRow(
                 box(title = "Pilih Variabel untuk Uji", 
                     width = 12, 
@@ -371,7 +398,8 @@ ui <- dashboardPage(
                   tabPanel("Uji Asumsi", 
                            h4("Multikolinearitas (VIF)"), verbatimTextOutput("vif_result"), hr(),
                            h4("Normalitas Residual"), plotOutput("qq_plot", height = "300px"), verbatimTextOutput("shapiro_result"), hr(),
-                           h4("Homoskedastisitas"), plotOutput("resid_plot", height = "300px"), verbatimTextOutput("bp_result")
+                           h4("Homoskedastisitas"), plotOutput("resid_plot", height = "300px"), verbatimTextOutput("bp_result"), hr(),
+                           h4("Autokorelasi (Durbin-Watson)"),verbatimTextOutput("dw_result")
                   ),
                   tabPanel("Interpretasi Otomatis", uiOutput("interpretasi_regresi") %>% withSpinner())
                 ))
@@ -383,7 +411,7 @@ ui <- dashboardPage(
               h2("Unduh Data Pilihan"),
               fluidRow(
                 box(width = 12, status = "primary", solidHeader = TRUE, title = "Pengaturan Unduhan",
-                    selectInput(inputId = "vars_unduh", label = "Pilih variabel:", choices = names(sovi_data), selected = names(sovi_data), multiple = TRUE, selectize = TRUE),
+                    uiOutput("vars_unduh_ui"),
                     radioButtons(inputId = "format_unduh", label = "Format File:", choices = c("CSV" = "csv", "Excel (XLSX)" = "xlsx", "SPSS (SAV)" = "sav"), selected = "csv", inline = TRUE),
                     downloadButton("download_data_button", "Unduh Data")
                 )
@@ -397,6 +425,7 @@ ui <- dashboardPage(
 #                              SERVER LOGIC                                   #
 
 server <- function(input, output, session) {
+  data_reaktif <- reactiveVal(sovi_data)
   data_kategori <- reactiveVal(NULL)
   
   # Observer untuk sinkronisasi input
@@ -404,13 +433,16 @@ server <- function(input, output, session) {
     pilihan_semua <- input$vars_selected
     if (is.null(pilihan_semua)) return()
     
-    pilihan_numerik <- pilihan_semua[sapply(sovi_data[, pilihan_semua, drop = FALSE], is.numeric)]
+    pilihan_numerik <- pilihan_semua[sapply(data_reaktif()[, pilihan_semua, drop = FALSE], is.numeric)]
     
     # 1. Update Menu Eksplorasi Data
     updateSelectInput(session, "var_plot", choices = pilihan_semua, selected = pilihan_semua[1])
     
     # 2. Update Menu Uji Asumsi
     updateSelectInput(session, "var_asumsi", choices = pilihan_numerik, selected = pilihan_numerik[1])
+    
+    # Transformasi Data
+    updateSelectInput(session, "var_to_transform", choices = pilihan_numerik, selected = pilihan_numerik[1])
     
     # 3. Update Menu Uji Beda Rata-rata
     updateSelectInput(session, "var_1samp", choices = pilihan_numerik, selected = pilihan_numerik[1])
@@ -440,7 +472,7 @@ server <- function(input, output, session) {
   # Menu Beranda
   output$total_kabkota <- renderValueBox({
     valueBox(
-      value = nrow(sovi_data),
+      value = nrow(data_reaktif()),
       subtitle = "Total Kabupaten/Kota",
       icon = icon("map-marked-alt"),
       color = "primary" 
@@ -448,7 +480,7 @@ server <- function(input, output, session) {
   })
   
   output$avg_poverty <- renderValueBox({
-    avg_pov <- mean(sovi_data$POVERTY, na.rm = TRUE)
+    avg_pov <- mean(data_reaktif()$POVERTY, na.rm = TRUE)
     valueBox(
       value = paste0(round(avg_pov, 2), "%"),
       subtitle = "Rata-rata Kemiskinan",
@@ -458,7 +490,7 @@ server <- function(input, output, session) {
   })
   
   output$avg_noelectric <- renderValueBox({
-    avg_noelec <- mean(sovi_data$NOELECTRIC, na.rm = TRUE)
+    avg_noelec <- mean(data_reaktif()$NOELECTRIC, na.rm = TRUE)
     valueBox(
       value = paste0(round(avg_noelec, 2), "%"),
       subtitle = "RT Tanpa Listrik",
@@ -468,7 +500,7 @@ server <- function(input, output, session) {
   })
   
   output$total_populasi <- renderValueBox({
-    total_pop <- sum(as.numeric(sovi_data$POPULATION), na.rm = TRUE)
+    total_pop <- sum(as.numeric(data_reaktif()$POPULATION), na.rm = TRUE)
     valueBox(
       value = format(total_pop, big.mark = ",", scientific = FALSE),
       subtitle = "Total Populasi Terdata",
@@ -495,7 +527,7 @@ server <- function(input, output, session) {
       return()
     }
     
-    var_data <- sovi_data[[input$var_kontinyu]]
+    var_data <- data_reaktif()[[input$var_kontinyu]]
     breaks <- NULL
     
     if (input$metode_kat == "quantile") {
@@ -510,9 +542,9 @@ server <- function(input, output, session) {
                     include.lowest = TRUE)
     
     hasil_df <- data.frame(
-      Provinsi = sovi_data$PROVINCE_NAME,
-      Nama_Kota = sovi_data$CITY_NAME,
-      ID = sovi_data$DISTRICTCODE,
+      Provinsi = data_reaktif()$PROVINCE_NAME,
+      Nama_Kota = data_reaktif()$CITY_NAME,
+      ID = data_reaktif()$DISTRICTCODE,
       Nilai_Asli = var_data,
       Kategori_Hasil = kategori
     )
@@ -577,10 +609,25 @@ server <- function(input, output, session) {
   
   data_filtered <- reactive({
     req(input$vars_selected)
-    sovi_data %>% dplyr::select(all_of(input$vars_selected))
+    data_reaktif() %>% dplyr::select(all_of(input$vars_selected))
   })
   
   # Menu Eksplorasi Data
+  output$vars_selected_ui <- renderUI({
+    selectInput("vars_selected", "Pilih variabel yang akan digunakan di semua menu analisis:", 
+                choices = names(data_reaktif()), 
+                multiple = TRUE, 
+                selectize = TRUE,
+                selected = isolate(input$vars_selected) %||% names(sovi_data)[sapply(sovi_data, is.numeric)])
+  })
+  
+  output$vars_unduh_ui <- renderUI({
+    selectInput("vars_unduh", "Pilih variabel yang ingin diunduh:",
+                choices = names(data_reaktif()),
+                selected = names(data_reaktif()),
+                multiple = TRUE, selectize = TRUE)
+  })
+  
   output$tabel_stat <- DT::renderDataTable({
     df <- data_filtered()
     req(ncol(df) > 0)
@@ -621,16 +668,16 @@ server <- function(input, output, session) {
   })
   
   output$boxplot <- renderPlot({
-    req(input$var_plot, is.numeric(sovi_data[[input$var_plot]]))
-    ggplot(sovi_data, aes_string(y = input$var_plot)) +
+    req(input$var_plot, is.numeric(data_reaktif()[[input$var_plot]]))
+    ggplot(data_reaktif(), aes_string(y = input$var_plot)) +
       geom_boxplot(fill = "skyblue", color = "navy") +
       theme_minimal(base_size = 14) +
       labs(title = paste("Boxplot untuk", input$var_plot), y = "Nilai", x = "")
   })
   
   output$qqplot <- renderPlot({
-    req(input$var_plot, is.numeric(sovi_data[[input$var_plot]]))
-    x <- sovi_data[[input$var_plot]]
+    req(input$var_plot, is.numeric(data_reaktif()[[input$var_plot]]))
+    x <- data_reaktif()[[input$var_plot]]
     req(length(na.omit(x)) > 0)
     
     ggplot(data.frame(val = x), aes(sample = val)) +
@@ -641,8 +688,8 @@ server <- function(input, output, session) {
   })
   
   output$histplot <- renderPlot({
-    req(input$var_plot, is.numeric(sovi_data[[input$var_plot]]))
-    ggplot(sovi_data, aes_string(x = input$var_plot)) +
+    req(input$var_plot, is.numeric(data_reaktif()[[input$var_plot]]))
+    ggplot(data_reaktif(), aes_string(x = input$var_plot)) +
       geom_histogram(fill = "#69b3a2", color = "white", bins = 30) +
       theme_minimal(base_size = 14) +
       labs(title = paste("Histogram untuk", input$var_plot), x = "Nilai", y = "Frekuensi")
@@ -730,9 +777,46 @@ server <- function(input, output, session) {
   )
   
   # Menu Uji Asumsi Data
+  observeEvent(input$apply_transform_button, {
+    req(input$var_to_transform, input$new_var_name)
+    
+    if (input$new_var_name %in% names(data_reaktif())) {
+      showNotification("Nama variabel baru sudah ada. Harap gunakan nama lain.", type = "error")
+      return()
+    }
+    if (!grepl("^[a-zA-Z0-9_.]+$", input$new_var_name)) {
+      showNotification("Nama variabel baru hanya boleh berisi huruf, angka, titik, dan underscore.", type = "error")
+      return()
+    }
+    
+    current_data <- data_reaktif()
+    var_to_transform <- current_data[[input$var_to_transform]]
+    
+    new_var <- tryCatch({
+      switch(input$transform_method_asumsi,
+             "log" = log1p(var_to_transform),
+             "sqrt" = sqrt(var_to_transform),
+             "arcsin_sqrt" = asin(sqrt(var_to_transform / 100))
+      )
+    }, error = function(e) {
+      showNotification(paste("Transformasi gagal:", e$message), type = "error")
+      return(NULL)
+    })
+    
+    if (!is.null(new_var)) {
+      current_data[[input$new_var_name]] <- new_var
+      data_reaktif(current_data)
+      
+      updateSelectInput(session, "vars_selected", 
+                        selected = c(input$vars_selected, input$new_var_name))
+      
+      showNotification(paste("Variabel baru '", input$new_var_name, "' berhasil dibuat!"), type = "message", duration = 5)
+    }
+  })
+  
   asumsi_results <- reactive({
     req(input$var_asumsi)
-    dat <- sovi_data[[input$var_asumsi]]
+    dat <- data_reaktif()[[input$var_asumsi]]
     
     if (!is.numeric(dat) || length(na.omit(dat)) < 3) {
       return(list(error = "Data tidak valid. Pilih variabel numerik dengan minimal 3 observasi."))
@@ -763,7 +847,7 @@ server <- function(input, output, session) {
   
   output$shapiro_test <- renderPrint({
     req(input$var_asumsi)
-    dat <- sovi_data[[input$var_asumsi]]
+    dat <- data_reaktif()[[input$var_asumsi]]
     
     if (!is.numeric(dat) || length(na.omit(dat)) < 3 || length(na.omit(dat)) > 5000) {
       cat("Analisis Dibatalkan: Variabel harus numerik dengan 3 hingga 5000 data valid untuk Uji Shapiro-Wilk.")
@@ -782,7 +866,7 @@ server <- function(input, output, session) {
   
   output$homogeneity_test <- renderPrint({
     req(input$var_asumsi)
-    dat <- sovi_data[[input$var_asumsi]]
+    dat <- data_reaktif()[[input$var_asumsi]]
     
     if (!is.numeric(dat) || length(na.omit(dat)) < 2) {
       cat("Analisis Dibatalkan: Variabel harus numerik dan memiliki > 2 data valid.")
@@ -806,15 +890,14 @@ server <- function(input, output, session) {
     cat(interpretation)
   })
   
-  
   output$outlier_plot <- renderPlot({
     req(input$var_asumsi)
-    boxplot(sovi_data[[input$var_asumsi]], main = paste("Boxplot dari", input$var_asumsi), col = "tomato", border = "darkred", pch = 16)
+    boxplot(data_reaktif()[[input$var_asumsi]], main = paste("Boxplot dari", input$var_asumsi), col = "tomato", border = "darkred", pch = 16)
   })
   
   output$outlier_summary <- renderPrint({
     req(input$var_asumsi)
-    x <- na.omit(sovi_data[[input$var_asumsi]])
+    x <- na.omit(data_reaktif()[[input$var_asumsi]])
     
     q1 <- quantile(x, 0.25)
     q3 <- quantile(x, 0.75)
@@ -886,15 +969,15 @@ server <- function(input, output, session) {
   observe({
     grouping_var <- input$var_2samp_cat
     
-    if (!is.null(grouping_var) && grouping_var %in% names(sovi_data)) {
-      median_value <- median(sovi_data[[grouping_var]], na.rm = TRUE)
+    if (!is.null(grouping_var) && grouping_var %in% names(data_reaktif())) {
+      median_value <- median(data_reaktif()[[grouping_var]], na.rm = TRUE)
       updateNumericInput(session, "split_val_2samp", value = round(median_value, 2))
     }
   })
   
   observeEvent(input$run_1samp, {
     req(input$var_1samp, !is.na(input$mu_1samp))
-    var_data <- na.omit(sovi_data[[input$var_1samp]])
+    var_data <- na.omit(data_reaktif()[[input$var_1samp]])
     rv_rata$last_test_inputs <- list(var1 = input$var_1samp, mu = input$mu_1samp)
     rv_rata$test_type <- "Uji 1 Kelompok"
     
@@ -924,7 +1007,7 @@ server <- function(input, output, session) {
   observeEvent(input$run_2samp, {
     req(input$var_2samp_num, input$var_2samp_cat, !is.na(input$split_val_2samp))
     
-    df <- na.omit(sovi_data[, c(input$var_2samp_num, input$var_2samp_cat)])
+    df <- na.omit(data_reaktif()[, c(input$var_2samp_num, input$var_2samp_cat)])
     group1 <- df[df[[input$var_2samp_cat]] <= input$split_val_2samp, ][[input$var_2samp_num]]
     group2 <- df[df[[input$var_2samp_cat]] > input$split_val_2samp, ][[input$var_2samp_num]]
     
@@ -1010,7 +1093,7 @@ server <- function(input, output, session) {
     req(input$var_prop2_cond, input$cond_prop2_text, input$var_prop2_group)
     
     tryCatch({
-      df <- na.omit(sovi_data[, c(input$var_prop2_cond, input$var_prop2_group)])
+      df <- na.omit(data_reaktif()[, c(input$var_prop2_cond, input$var_prop2_group)])
       median_value <- median(df[[input$var_prop2_group]], na.rm = TRUE)
       grup1_df <- df[df[[input$var_prop2_group]] <= median_value, ]
       grup2_df <- df[df[[input$var_prop2_group]] > median_value, ]
@@ -1064,8 +1147,8 @@ server <- function(input, output, session) {
   
   observeEvent(input$run_ftest, {
     req(input$var1_ftest, input$var2_ftest)
-    var1_data <- na.omit(sovi_data[[input$var1_ftest]])
-    var2_data <- na.omit(sovi_data[[input$var2_ftest]])
+    var1_data <- na.omit(data_reaktif()[[input$var1_ftest]])
+    var2_data <- na.omit(data_reaktif()[[input$var2_ftest]])
     rv_propvar$test_type <- "Uji Varians 2 Kelompok"
     rv_propvar$inputs <- list(var1 = input$var1_ftest, var2 = input$var2_ftest)
     
@@ -1103,64 +1186,77 @@ server <- function(input, output, session) {
   # Submenu ANOVA
   rv_anova <- reactiveValues(test_type = NULL, inputs = NULL, asumsi_status = NULL, anova_result = NULL, posthoc_result = NULL, interpretation = NULL)
   
+  # ANOVA 1 Arah
   observeEvent(input$run_anova1, {
     req(input$var_anova1_dv, input$var_anova1_iv)
-    df <- na.omit(sovi_data[, c(input$var_anova1_dv, input$var_anova1_iv)])
+    df <- na.omit(data_reaktif()[, c(input$var_anova1_dv, input$var_anova1_iv)])
     dv_data <- df[[input$var_anova1_dv]]
     iv_data <- df[[input$var_anova1_iv]]
     
     quantiles <- quantile(iv_data, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE)
     iv_factor <- cut(iv_data, breaks = unique(quantiles), labels = c("Rendah", "Sedang", "Tinggi"), include.lowest = TRUE)
     
-    if (length(na.omit(dv_data)) > 5000) {
-      p_shapiro <- 0.06 
-    } else {
-      p_shapiro <- shapiro.test(dv_data)$p.value
-    }
-    
+    p_shapiro <- if (length(na.omit(dv_data)) > 5000) 0.06 else shapiro.test(dv_data)$p.value
     levene_test <- car::leveneTest(dv_data ~ iv_factor)
     p_levene <- levene_test$`Pr(>F)`[1]
-    
     asumsi_lolos <- p_shapiro >= 0.05 && p_levene >= 0.05
     
     output$asumsi_anova1_status <- renderUI({
       if(asumsi_lolos) {
-        tags$div(class = "alert alert-success", h4("LOLOS"), p(paste0("Asumsi Normalitas (p = ", round(p_shapiro, 3), ") dan Homogenitas (p = ", round(p_levene, 3), ") terpenuhi.")))
+        tags$div(class = "alert alert-success", h4("ASUMSI TERPENUHI"))
       } else {
-        tags$div(class = "alert alert-danger", h4("GAGAL"), p(paste0("Asumsi tidak terpenuhi. Normalitas (p = ", round(p_shapiro, 3), "), Homogenitas (p = ", round(p_levene, 3), "). Disarankan uji Kruskal-Wallis.")))
+        tags$div(class = "alert alert-warning", h4("PERINGATAN: ASUMSI TIDAK TERPENUHI"))
       }
     })
     
-    if (asumsi_lolos) {
-      anova_model <- aov(dv_data ~ iv_factor)
-      anova_summary <- summary(anova_model)
-      anova_p_val <- anova_summary[[1]]$`Pr(>F)`[1]
-      posthoc_res <- if (!is.na(anova_p_val) && anova_p_val < 0.05) TukeyHSD(anova_model) else NULL
-      
-      output$res_anova1 <- renderPrint({ print(anova_summary) })
-      output$res_posthoc_anova1 <- renderPrint({ if(!is.null(posthoc_res)) print(posthoc_res) else cat("Tidak dilakukan (hasil ANOVA tidak signifikan).") })
-      
-      interpretation_text <- paste0("Hasil ANOVA menunjukkan bahwa terdapat ", 
-                                    if(!is.na(anova_p_val) && anova_p_val < 0.05) "<b>perbedaan rata-rata yang signifikan</b>" else "<b>TIDAK ada perbedaan rata-rata yang signifikan</b>",
-                                    " pada variabel '", input$var_anova1_dv, "' di antara kelompok '", input$var_anova1_iv, "' (p = ", round(anova_p_val, 4), ").")
-      if (!is.null(posthoc_res)) {
-        interpretation_text <- paste0(interpretation_text, " Uji lanjut Tukey HSD menunjukkan detail kelompok mana saja yang berbeda secara signifikan.")
-      }
-      output$int_anova1 <- renderUI({ p(HTML(interpretation_text)) })
-      
-      rv_anova$test_type <- "ANOVA 1 Arah"; rv_anova$inputs <- list(dv = input$var_anova1_dv, iv = input$var_anova1_iv); rv_anova$asumsi_status <- "Lolos"
-      rv_anova$anova_result <- anova_summary; rv_anova$posthoc_result <- posthoc_res; rv_anova$interpretation <- interpretation_text
-      
+    anova_model <- aov(dv_data ~ iv_factor)
+    anova_summary <- summary(anova_model)
+    
+    f_value <- anova_summary[[1]]$`F value`[1]
+    df1 <- anova_summary[[1]]$`Df`[1]
+    df2 <- anova_summary[[1]]$`Df`[2]
+    p_value <- anova_summary[[1]]$`Pr(>F)`[1]
+
+    posthoc_res <- if (!is.na(p_value) && p_value < 0.05) TukeyHSD(anova_model) else NULL
+    
+    output$res_anova1 <- renderPrint({ print(anova_summary) })
+    output$res_posthoc_anova1 <- renderPrint({ if(!is.null(posthoc_res)) print(posthoc_res) else cat("Tidak dilakukan (hasil ANOVA tidak signifikan).") })
+    
+    interpretation_text <- if (p_value < 0.05) {
+      paste0("Hasil analisis menunjukkan bahwa terdapat perbedaan yang signifikan secara statistik pada rata-rata variabel '", 
+             input$var_anova1_dv, "' di antara kelompok variabel '", input$var_anova1_iv, 
+             "' (F(", df1, ", ", df2, ") = ", round(f_value, 2), ", p < 0.05). ",
+             "Hasil uji lanjut Tukey HSD dapat digunakan untuk melihat kelompok mana saja yang berbeda secara spesifik.")
     } else {
-      output$res_anova1 <- renderPrint({ cat("Analisis ANOVA dibatalkan karena asumsi tidak terpenuhi.") })
-      output$res_posthoc_anova1 <- renderPrint({ cat("") }); output$int_anova1 <- renderUI({ p("") }); rv_anova$test_type <- NULL
+      paste0("Hasil analisis menunjukkan bahwa tidak terdapat cukup bukti statistik untuk menyatakan adanya perbedaan rata-rata variabel '", 
+             input$var_anova1_dv, "' di antara kelompok variabel '", input$var_anova1_iv, 
+             "' (F(", df1, ", ", df2, ") = ", round(f_value, 2), ", p = ", round(p_value, 3), ").")
     }
+    
+    output$int_anova1 <- renderUI({ 
+      if (!asumsi_lolos) {
+        tagList(
+          p(HTML(interpretation_text)),
+          tags$b("Catatan: Karena asumsi tidak terpenuhi, hasil ini mungkin tidak valid. Pertimbangkan menggunakan uji non-parametrik Kruskal-Wallis.")
+        )
+      } else {
+        p(HTML(interpretation_text))
+      }
+    })
+    
+    rv_anova$test_type <- "ANOVA 1 Arah"
+    rv_anova$inputs <- list(dv = input$var_anova1_dv, iv = input$var_anova1_iv)
+    rv_anova$asumsi_status <- ifelse(asumsi_lolos, "Terpenuhi", "Tidak Terpenuhi")
+    rv_anova$anova_result <- anova_summary
+    rv_anova$posthoc_result <- posthoc_res
+    rv_anova$interpretation <- interpretation_text
   })
   
+  # ANOVA 2 Arah
   observeEvent(input$run_anova2, {
     req(input$var_anova2_dv, input$var_anova2_iv1, input$var_anova2_iv2)
     
-    df <- na.omit(sovi_data[, c(input$var_anova2_dv, input$var_anova2_iv1, input$var_anova2_iv2)])
+    df <- na.omit(data_reaktif()[, c(input$var_anova2_dv, input$var_anova2_iv1, input$var_anova2_iv2)])
     names(df) <- c("dv", "iv1", "iv2")
     
     df$iv1_factor <- cut(df$iv1, breaks = 2, labels = c("Rendah", "Tinggi"))
@@ -1168,51 +1264,54 @@ server <- function(input, output, session) {
     
     model_res <- aov(dv ~ iv1_factor * iv2_factor, data = df)
     
-    if (length(resid(model_res)) > 5000) {
-      p_shapiro <- 0.06
-    } else {
-      p_shapiro <- shapiro.test(resid(model_res))$p.value
-    }
-    
+    p_shapiro <- if (length(resid(model_res)) > 5000) 0.06 else shapiro.test(resid(model_res))$p.value
     levene_test <- car::leveneTest(dv ~ iv1_factor * iv2_factor, data = df)
     p_levene <- levene_test$`Pr(>F)`[1]
     asumsi_lolos <- p_shapiro >= 0.05 && p_levene >= 0.05
     
     output$asumsi_anova2_status <- renderUI({
       if(asumsi_lolos) {
-        tags$div(class = "alert alert-success", h4("LOLOS"), p("Asumsi Normalitas Residual dan Homogenitas Varians terpenuhi."))
+        tags$div(class = "alert alert-success", h4("ASUMSI TERPENUHI"))
       } else {
-        tags$div(class = "alert alert-danger", h4("GAGAL"), p("Asumsi tidak terpenuhi."))
+        tags$div(class = "alert alert-warning", h4("PERINGATAN: ASUMSI TIDAK TERPENUHI"))
       }
     })
     
-    if (asumsi_lolos) {
-      anova_summary <- summary(model_res)
-      p_values <- anova_summary[[1]]$`Pr(>F)`
-      posthoc_res <- if (any(p_values < 0.05, na.rm = TRUE)) TukeyHSD(model_res) else NULL
-      
-      output$res_anova2 <- renderPrint({ print(anova_summary) })
-      output$res_posthoc_anova2 <- renderPrint({ if(!is.null(posthoc_res)) print(posthoc_res) else cat("Tidak dilakukan (tidak ada efek signifikan).") })
-      
-      p_iv1 <- p_values[1]; p_iv2 <- p_values[2]; p_interaksi <- p_values[3]
-      interpretation_text <- paste0(
-        "<ul>",
-        "<li><b>Efek utama '", input$var_anova2_iv1, "'</b>: ", if(!is.na(p_iv1) && p_iv1 < 0.05) "Signifikan" else "Tidak Signifikan", " (p = ", round(p_iv1, 4), ").</li>",
-        "<li><b>Efek utama '", input$var_anova2_iv2, "'</b>: ", if(!is.na(p_iv2) && p_iv2 < 0.05) "Signifikan" else "Tidak Signifikan", " (p = ", round(p_iv2, 4), ").</li>",
-        "<li><b>Efek Interaksi</b>: ", if(!is.na(p_interaksi) && p_interaksi < 0.05) "Signifikan" else "Tidak Signifikan", " (p = ", round(p_interaksi, 4), ").</li>",
-        "</ul>"
-      )
-      output$int_anova2 <- renderUI({ HTML(interpretation_text) })
-      
-      rv_anova$test_type <- "ANOVA 2 Arah"
-      rv_anova$inputs <- list(dv=input$var_anova2_dv, iv1=input$var_anova2_iv1, iv2=input$var_anova2_iv2)
-      rv_anova$asumsi_status <- "Lolos"; rv_anova$anova_result <- anova_summary; rv_anova$posthoc_result <- posthoc_res
-      rv_anova$interpretation <- interpretation_text
-      
-    } else {
-      output$res_anova2 <- renderPrint({ cat("Analisis ANOVA dibatalkan karena asumsi tidak terpenuhi.") })
-      output$res_posthoc_anova2 <- renderPrint({ cat("") }); output$int_anova2 <- renderUI({ p("") }); rv_anova$test_type <- NULL
-    }
+    anova_summary <- summary(model_res)
+
+    stats <- anova_summary[[1]]
+    iv1_f <- stats$`F value`[1]; iv1_df1 <- stats$`Df`[1]; iv1_df2 <- stats$`Df`[3]; iv1_p <- stats$`Pr(>F)`[1]
+    iv2_f <- stats$`F value`[2]; iv2_df1 <- stats$`Df`[2]; iv2_df2 <- stats$`Df`[3]; iv2_p <- stats$`Pr(>F)`[2]
+    int_f <- stats$`F value`[3]; int_df1 <- stats$`Df`[3]; int_df2 <- stats$`Df`[3]; int_p <- stats$`Pr(>F)`[3]
+    
+    iv1_interp <- paste0("<li><b>Efek Utama ", input$var_anova2_iv1, ":</b> ", if(iv1_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", iv1_df1, ", ", iv1_df2, ") = ", round(iv1_f, 2), ", p = ", round(iv1_p, 3), ".</li>")
+    iv2_interp <- paste0("<li><b>Efek Utama ", input$var_anova2_iv2, ":</b> ", if(iv2_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", iv2_df1, ", ", iv2_df2, ") = ", round(iv2_f, 2), ", p = ", round(iv2_p, 3), ".</li>")
+    int_interp <- paste0("<li><b>Efek Interaksi:</b> ", if(int_p < 0.05) "Signifikan." else "Tidak signifikan.", " F(", int_df1, ", ", int_df2, ") = ", round(int_f, 2), ", p = ", round(int_p, 3), ".</li>")
+    
+    interpretation_text <- paste0("<ul>", iv1_interp, iv2_interp, int_interp, "</ul>")
+    
+    posthoc_res <- if (any(stats$`Pr(>F)` < 0.05, na.rm = TRUE)) TukeyHSD(model_res) else NULL
+    
+    output$res_anova2 <- renderPrint({ print(anova_summary) })
+    output$res_posthoc_anova2 <- renderPrint({ if(!is.null(posthoc_res)) print(posthoc_res) else cat("Tidak dilakukan.") })
+    
+    output$int_anova2 <- renderUI({
+      if(!asumsi_lolos){
+        tagList(
+          HTML(interpretation_text),
+          tags$b("Catatan: Karena asumsi tidak terpenuhi, hasil ini mungkin tidak valid. Pertimbangkan transformasi variabel dependen.")
+        )
+      } else {
+        HTML(interpretation_text)
+      }
+    })
+    
+    rv_anova$test_type <- "ANOVA 2 Arah"
+    rv_anova$inputs <- list(dv=input$var_anova2_dv, iv1=input$var_anova2_iv1, iv2=input$var_anova2_iv2)
+    rv_anova$asumsi_status <- ifelse(asumsi_lolos, "Terpenuhi", "Tidak Terpenuhi")
+    rv_anova$anova_result <- anova_summary
+    rv_anova$posthoc_result <- posthoc_res
+    rv_anova$interpretation <- interpretation_text
   })
   
   output$downloadAnovaPDF <- downloadHandler(
@@ -1244,7 +1343,7 @@ server <- function(input, output, session) {
   }
   
   data_transformed <- reactive({
-    df <- sovi_data
+    df <- data_reaktif()
     if (!is.null(input$var_transform) && input$transform_method != "None") {
       for (var in input$var_transform) {
         if (var %in% names(df)) {
@@ -1295,12 +1394,18 @@ server <- function(input, output, session) {
   
   output$bp_result <- renderPrint({ lmtest::bptest(model_fit()) })
   
+  output$dw_result <- renderPrint({ req(model_fit()); lmtest::dwtest(model_fit())})
+  
   output$interpretasi_regresi <- renderUI({
     model <- model_fit(); model_summary <- summary(model)
     
     resids <- resid(model); p_shapiro <- if(length(na.omit(resids)) <= 5000) shapiro.test(resids)$p.value else 0.06
     p_bp <- lmtest::bptest(model)$p.value
     vif_vals <- if(length(coef(model)) > 2) car::vif(model) else c(0)
+    
+    dw_test <- lmtest::dwtest(model)
+    p_dw <- dw_test$p.value
+
     adj_r_sq <- model_summary$adj.r.squared
     f_stat <- model_summary$fstatistic
     p_f_stat <- if(!is.null(f_stat)) pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = FALSE) else 1
@@ -1311,9 +1416,10 @@ server <- function(input, output, session) {
       paste0("<li><b>Multikolinearitas (VIF):</b> ", if(any(vif_vals > 10)) "Asumsi Terlanggar (VIF > 10)." else "Asumsi terpenuhi (VIF < 10).", "</li>"),
       paste0("<li><b>Normalitas Residual (Shapiro-Wilk):</b> ", if(!is.na(p_shapiro) && p_shapiro < 0.05) "Asumsi terlanggar (p < 0.05)." else "Asumsi terpenuhi (p ≥ 0.05).", "</li>"),
       paste0("<li><b>Homoskedastisitas (Breusch-Pagan):</b> ", if(!is.na(p_bp) && p_bp < 0.05) "Asumsi terlanggar (terjadi heteroskedastisitas)." else "Asumsi terpenuhi (homoskedastisitas).", "</li>"),
+      paste0("<li><b>Autokorelasi (Durbin-Watson):</b> ", if(!is.na(p_dw) && p_dw < 0.05) "Asumsi terlanggar (terdapat autokorelasi positif)." else "Asumsi terpenuhi (tidak ada autokorelasi).", "</li>"),
       "</ul>"
     )
-    
+
     html_model <- paste(
       "<h4>Interpretasi Kelayakan Model</h4><ul>",
       paste0("<li><b>Kelayakan Model (Uji-F):</b> Berdasarkan Uji F, model secara keseluruhan ", if(!is.na(p_f_stat) && p_f_stat < 0.05) "<b>layak (signifikan)</b>" else "<b>tidak layak (tidak signifikan)</b>", " untuk digunakan (p = ", round(p_f_stat, 4), ").</li>"),
@@ -1355,7 +1461,7 @@ server <- function(input, output, session) {
   # Menu Unduh Data
   data_to_download <- reactive({
     req(input$vars_unduh)
-    dplyr::select(sovi_data, all_of(input$vars_unduh))
+    dplyr::select(data_reaktif(), all_of(input$vars_unduh))
   })
   
   output$tabel_preview_unduh <- renderDT({
@@ -1364,7 +1470,7 @@ server <- function(input, output, session) {
   
   output$download_data_button <- downloadHandler(
     filename = function() {
-      paste0("sovi_data_pilihan-", Sys.Date(), ".", input$format_unduh)
+      paste0("data_reaktif()_pilihan-", Sys.Date(), ".", input$format_unduh)
     },
     content = function(file) {
       data_dipilih <- data_to_download()

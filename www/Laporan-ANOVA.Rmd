@@ -11,7 +11,7 @@ params:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 ## Hasil Analisis: `r params$test_type`
@@ -24,29 +24,28 @@ Status pemeriksaan asumsi (Normalitas & Homogenitas): `r params$asumsi_status`
 
 ```{r}
 if(!is.null(params$anova_result)){
-  cat("```\n")
-  print(params$anova_result)
-  cat("```\n")
+  knitr::kable(params$anova_result[[1]], caption = "Tabel Ringkasan ANOVA")
 } else {
-  cat("Analisis ANOVA tidak dijalankan karena asumsi tidak terpenuhi.")
+  cat("Analisis ANOVA tidak dijalankan.")
 }
 ```
 
 ```{r}
 if(!is.null(params$posthoc_result)){
-  cat("```\n")
-  print(params$posthoc_result)
-  cat("```\n")
+  knitr::kable(params$posthoc_result[[1]], caption = "Hasil Uji Lanjutan Tukey HSD")
 } else {
   cat("Uji lanjut tidak dilakukan.")
 }
 ```
 
-# Interpretasi
-clean_interpretation <- gsub("<ul>", "", params$interpretation)
-clean_interpretation <- gsub("</ul>", "", clean_interpretation)
-clean_interpretation <- gsub("<li>", "- ", clean_interpretation)
-clean_interpretation <- gsub("</li>", "\n", clean_interpretation)
-clean_interpretation <- gsub("<b>|</b>", "**", clean_interpretation)
+```{r interpretation-text, results='asis'}
+if(!is.null(params$interpretation)){
 
-cat(clean_interpretation)
+  clean_interpretation <- gsub("<ul>|</ul>|<li>|</li>|</p>", "", params$interpretation)
+  clean_interpretation <- gsub("<p>", "\n", clean_interpretation)
+  clean_interpretation <- gsub("<b>|</b>", "**", clean_interpretation)
+  
+  cat(clean_interpretation)
+}
+```
+
