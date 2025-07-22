@@ -3,6 +3,7 @@ title: "Hasil Eksplorasi Data"
 output: pdf_document
 params:
   data: NA
+  vars: NULL
 ---
 
 ```{r setup, include=FALSE}
@@ -22,7 +23,11 @@ summary(params$data)
 
 ```{r}
 cor_matrix <- cor(params$data, use = "pairwise.complete.obs")
-corrplot::corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", addCoef.col = "black")
+corrplot::corrplot(cor_matrix, 
+                   method = "color", 
+                   type = "upper", 
+                   tl.col = "black", 
+                   addCoef.col = "black")
 ```
 
 ```{r}
@@ -38,7 +43,9 @@ params$data %>%
 df <- params$data
 
 cat("Tinjauan Statistik Awal:\n")
-cat("Laporan ini menyajikan statistik deskriptif untuk", ncol(df), "variabel terpilih.\n\n")
+cat("Laporan ini menyajikan statistik deskriptif untuk", 
+    ncol(df), 
+    "variabel terpilih.\n\n")
 
 cat("Interpretasi Distribusi:\n")
 for (v in names(df)) {
@@ -67,7 +74,7 @@ for (v in names(df)) {
   # Mean vs median
   cat(". ")
   if (abs(mean_x - median_x) > 0.5 * sd_x) {
-    cat("\n   Perbedaan mean dan median menunjukkan potensi outlier atau distribusi tidak normal.\n")
+    cat("\n Perbedaan mean dan median menunjukkan potensi outlier atau distribusi tidak normal.\n")
   } else {
     cat("\n   Mean dan median relatif seimbang.\n")
   }
@@ -90,7 +97,8 @@ if (ncol(df_num) > 1) {
                                        ifelse(abs(r) >= 0.2, "lemah", "sangat lemah"))))
       direction <- ifelse(r > 0, "positif", ifelse(r < 0, "negatif", "tidak ada"))
       
-      cat(paste0("- ", var1, " vs ", var2, ": hubungan ", direction, " dengan kekuatan ", strength, " (r = ", round(r, 2), ").\n"))
+      cat(paste0("- ", var1, " vs ", var2, ": hubungan ", direction, 
+                 " dengan kekuatan ", strength, " (r = ", round(r, 2), ").\n"))
     }
   }
 }
