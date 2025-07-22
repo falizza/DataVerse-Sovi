@@ -1,8 +1,4 @@
-#-----------------------------------------------------------------------------#
-#                        LOAD PAKET YANG DIBUTUHKAN                           #
-#-----------------------------------------------------------------------------#
-# Paket-paket ini adalah yang benar-benar digunakan dalam aplikasi.
-# Paket yang tidak dipanggil fungsinya telah dihapus untuk efisiensi.
+#                        LOAD PACKAGE YANG DIGUNAKAN                          #
 
 library(shiny)             # Framework dasar dashboard
 library(shinydashboard)    # Layout dashboard
@@ -19,19 +15,13 @@ library(writexl)           # Menulis file Excel (.xlsx)
 library(haven)             # Menulis file SPSS (.sav)
 library(shinycssloaders)   # Animasi loading pada output
 
-#-----------------------------------------------------------------------------#
-#                                 LOAD DATA                                   #
-#-----------------------------------------------------------------------------#
-# Data dimuat sekali saat aplikasi dimulai untuk performa yang lebih baik.
+#                   LOAD DATA YANG DIGUNAKAN                                   #
 
 sovi_data <- read.csv2("data/sovi_data.csv")
 distance_matrix <- read.csv("data/distance.csv")
 indonesia_sf <- st_read("data/indonesia511.geojson")
 
-#-----------------------------------------------------------------------------#
 #                         USER INTERFACE (UI)                                 #
-#-----------------------------------------------------------------------------#
-# Bagian ini mendefinisikan tampilan dan layout aplikasi.
 
 ui <- dashboardPage(
   skin = "blue",
@@ -96,17 +86,14 @@ ui <- dashboardPage(
       "))
     ),
     tabItems(
-      # --- BERANDA (TAMPILAN BARU DENGAN RINGKASAN STATISTIK) ---
       tabItem(
         tabName = "beranda",
         fluidPage(
-          # --- Header ---
           div(class = "beranda-header",
               h2(icon("rocket"), " DataVerse: Visualisasi dan Analisis SOVI Indonesia"),
               p(class = "lead", "Platform interaktif untuk eksplorasi data kerentanan sosial di seluruh Indonesia.")
           ),
           
-          # --- Ringkasan Statistik ---
           fluidRow(
             valueBoxOutput("total_kabkota", width = 3),
             valueBoxOutput("avg_poverty", width = 3),
@@ -114,7 +101,6 @@ ui <- dashboardPage(
             valueBoxOutput("total_populasi", width = 3)
           ),
           
-          # --- Konten Detail ---
           fluidRow(
             column(width = 6,
                    box(
@@ -161,7 +147,6 @@ ui <- dashboardPage(
                    )
             ),
             column(width = 6,
-                   # --- Kotak Metadata yang sudah dimodifikasi ---
                    box(
                      title = tagList(icon("database"), " Metadata Variabel"),
                      status = "primary", solidHeader = TRUE, width = NULL, collapsible = TRUE,
@@ -205,7 +190,6 @@ ui <- dashboardPage(
         )
       ),
       
-      # --- KONTEN LAINNYA (TIDAK DIUBAH) ---
       tabItem(
         tabName = "manajemen", 
         fluidRow(
@@ -573,19 +557,16 @@ ui <- dashboardPage(
   )
 )
 
-#-----------------------------------------------------------------------------#
 #                              SERVER LOGIC                                   #
-#-----------------------------------------------------------------------------#
 
 server <- function(input, output, session) {
   
-  # --- SERVER LOGIC UNTUK BERANDA (DIPERBAIKI) ---
   output$total_kabkota <- renderValueBox({
     valueBox(
       value = nrow(sovi_data),
       subtitle = "Total Kabupaten/Kota",
       icon = icon("map-marked-alt"),
-      color = "primary"  # Diubah dari "blue"
+      color = "primary" 
     )
   })
   
@@ -595,7 +576,7 @@ server <- function(input, output, session) {
       value = paste0(round(avg_pov, 2), "%"),
       subtitle = "Rata-rata Kemiskinan",
       icon = icon("users"),
-      color = "danger"  # Diubah dari "red"
+      color = "danger"  
     )
   })
   
@@ -605,7 +586,7 @@ server <- function(input, output, session) {
       value = paste0(round(avg_noelec, 2), "%"),
       subtitle = "RT Tanpa Listrik",
       icon = icon("bolt"),
-      color = "warning"  # Diubah dari "yellow"
+      color = "warning"
     )
   })
   
@@ -615,7 +596,7 @@ server <- function(input, output, session) {
       value = format(total_pop, big.mark = ",", scientific = FALSE),
       subtitle = "Total Populasi Terdata",
       icon = icon("user-friends"),
-      color = "success"  # Diubah dari "green"
+      color = "success" 
     )
   })
   
@@ -671,12 +652,10 @@ server <- function(input, output, session) {
     updateSelectInput(session, "var_asumsi", choices = variabel_terpilih_asumsi, selected = variabel_terpilih_asumsi[1])
   })
   
-  # Ganti blok kode ini
   output$tabel_stat <- DT::renderDataTable({
     df <- data_filtered()
     req(ncol(df) > 0)
     
-    # BARIS YANG DIPERBAIKI
     numeric_df <- df %>% select_if(is.numeric)
     
     if (ncol(numeric_df) == 0) return(NULL)
@@ -740,11 +719,9 @@ server <- function(input, output, session) {
       labs(title = paste("Histogram untuk", input$var_plot), x = "Nilai", y = "Frekuensi")
   })
   
-  # Ganti blok kode ini
   output$corrplot <- renderPlot({
     df <- data_filtered()
     
-    # BARIS YANG DIPERBAIKI
     df_num <- df %>% select_if(is.numeric)
     
     req(ncol(df_num) > 1)
@@ -754,14 +731,12 @@ server <- function(input, output, session) {
       labs(title = "Matriks Korelasi Pearson")
   })
   
-  # Ganti blok kode ini
   output$interpretasi <- renderPrint({
     req(input$vars_selected)
     df <- data_filtered()
     cat("===== INTERPRETASI OTOMATIS =====\n")
     cat("Dashboard ini menyajikan statistik deskriptif untuk ", ncol(df), " variabel yang dipilih.\n\n")
     
-    # BARIS YANG DIPERBAIKI
     df_num <- df %>% select_if(is.numeric)
     
     if(ncol(df_num) > 0) {
@@ -1459,8 +1434,6 @@ server <- function(input, output, session) {
     })
 }
 
-#-----------------------------------------------------------------------------#
 #                             JALANKAN APLIKASI                               #
-#-----------------------------------------------------------------------------#
 
 shinyApp(ui, server)
