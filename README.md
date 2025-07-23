@@ -120,7 +120,7 @@ project/
 - Analisis korelasi antar variabel
 - Unduh laporan eksplorasi dalam format PDF
 
-### 3. **Analisis Spasial**
+### 3. **Peta Interaktif**
 - Pilih variabel untuk ditampilkan pada peta choropleth
 - Hover pada wilayah untuk melihat nama dan nilai spesifik
 - Gunakan legend untuk memahami gradasi warna (kuning = rendah, merah = tinggi)
@@ -133,13 +133,13 @@ project/
 - Buat variabel baru hasil transformasi
 - Interpretasi dan unduh laporan analisis dalam format PDF
 
-### 5. **Analisis Statistik**
+### 5. **Statistik Inferensia**
 - **Uji t**: Bandingkan rata-rata dengan nilai tertentu atau antar kelompok
 - **Uji Proporsi**: Analisis proporsi dalam satu atau dua kelompok
 - **ANOVA**: Bandingkan rata-rata lebih dari dua kelompok
 - Interpretasi dan unduh laporan analisis dalam format PDF 
 
-### 6. **Regresi**
+### 6. **Analisis Regresi**
 - Pilih variabel dependen dan independen
 - Terapkan transformasi jika diperlukan
 - Review hasil model dan uji asumsi
@@ -150,13 +150,13 @@ project/
 
 Dashboard menghasilkan berbagai output:
 
-### **Laporan PDF**
+### **Laporan Hasil Analisis PDF**
 - Laporan Eksplorasi Data
 - Laporan Uji Asumsi
 - Laporan Uji Statistik (t-test, proporsi, ANOVA)
 - Laporan Analisis Regresi
 
-### **Data Export**
+### **Unduh Data**
 - CSV untuk analisis lanjutan
 - Excel (.xlsx) untuk reporting
 - SPSS (.sav) untuk analisis statistik lanjutan
