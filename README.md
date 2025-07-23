@@ -1,3 +1,6 @@
+Dashboard interaktifnya di link berikut:
+🔗 [Klik untuk buka DataVerse-SOVI v2](https://faliza.shinyapps.io/dataverse-sovi-v2/)
+
 # DataVerse SOVI: Dashboard Analisis Kerentanan Sosial Indonesia
 
 Platform interaktif berbasis R Shiny untuk visualisasi dan analisis data Social Vulnerability Index (SOVI) di seluruh Indonesia. Dashboard ini menyediakan tools komprehensif untuk eksplorasi data, analisis statistik, dan pemodelan regresi dalam satu interface yang user-friendly.
