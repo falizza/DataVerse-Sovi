@@ -23,4 +23,6 @@ library(spdep)             # Untuk Uji Autokorelasi Spasial (Moran's I)
 sovi_data <- read.csv2("data/sovi_data.csv")
 sovi_data$DISTRICTCODE <- as.character(sovi_data$DISTRICTCODE)
 indonesia_sf <- st_read("data/indonesia511.geojson")
-indonesia_sf$kdkab <- as.character(indonesia_sf$kodeprkab)
+# Validasi geometri
+indonesia_sf <- st_make_valid(indonesia_sf)
+indonesia_sf$kdkab <- as.character(indonesia_sf$kddistrict)

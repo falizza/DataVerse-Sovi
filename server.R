@@ -328,11 +328,11 @@ server <- function(input, output, session) {
   # Menu Peta
   peta_data <- reactive({
     # Pilih hanya kolom identitas & geometri dari data spasial untuk menghindari duplikasi kolom
-    indonesia_sf_geom <- dplyr::select(indonesia_sf, kodeprkab, nmkab, nmprov)
+    indonesia_sf_geom <- dplyr::select(indonesia_sf, kddistrict, nmkab, nmprov)
     
     # Gabungkan dengan data reaktif. Semua kolom data (POVERTY, RENTED, dll.) akan
     # berasal dari data_reaktif() tanpa ada akhiran .x atau .y
-    left_join(indonesia_sf_geom, data_reaktif(), by = c("kodeprkab" = "DISTRICTCODE"))
+    left_join(indonesia_sf_geom, data_reaktif(), by = c("kddistrict" = "DISTRICTCODE"))
   })
   
   # 2. Render Peta Leaflet
